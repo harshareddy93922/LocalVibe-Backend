@@ -1,65 +1,61 @@
-import os
-from supabase import create_client, Client
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, EmailStr
+from typing import Optional
 
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
-
-if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
-    raise RuntimeError("Supabase environment variables are missing")
-
-supabase: Client = create_client(
-    SUPABASE_URL,
-    SUPABASE_SECRET_KEY
+from database.database import (
+    create_enquiry,
+    list_enquiries,
+    update_status
 )
 
-
-def init_db():
-    pass
+router = APIRouter()
 
 
-def create_enquiry(data):
-    response = (
-        supabase
-        .table("enquiries")
-        .insert({
-            "name": data["name"],
-            "phone": data["phone"],
-            "email": data.get("email"),
-            "destination": data.get("destination"),
-            "people": data.get("people"),
-            "dates": data.get("dates"),
-            "message": data["message"],
-            "interest": data.get("interest"),
-            "status": "NEW"
-        })
-        .execute()
-    )
-
-    if not response.data:
-        raise RuntimeError("Failed to create enquiry")
-
-    return response.data[0]["id"]
+class Enquiry(BaseModel):
+    name: str
+    phone: str
+    email: Optional[EmailStr] = None
+    destination: Optional[str] = None
+    people: Optional[str] = None
+    dates: Optional[str] = None
+    message: str
+    interest: Optional[str] = None
 
 
-def list_enquiries():
-    response = (
-        supabase
-        .table("enquiries")
-        .select("*")
-        .order("id", desc=True)
-        .execute()
-    )
-
-    return response.data
+@router.post("/enquiries")
+def create(item: Enquiry):
+    item_id = create_enquiry(item.model_dump())
+    return {
+        "success": True,
+        "id": item_id
+    }
 
 
-def update_status(item_id, status):
-    response = (
-        supabase
-        .table("enquiries")
-        .update({"status": status})
-        .eq("id", item_id)
-        .execute()
-    )
+@router.get("/enquiries")
+def get_all():
+    return {
+        "items": list_enquiries()
+    }
 
-    return response.data
+
+@router.patch("/enquiries/{item_id}/status")
+def change_status(item_id: int, status: str):
+    allowed = {
+        "NEW",
+        "CONTACTED",
+        "FOLLOW-UP",
+        "CONFIRMED",
+        "COMPLETED"
+    }
+
+    if status not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid status"
+        )
+
+    update_status(item_id, status)
+
+    return {
+        "success": True
+    }
