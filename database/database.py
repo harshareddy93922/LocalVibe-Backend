@@ -1,56 +1,66 @@
-import sqlite3
-from pathlib import Path
+import os
+from supabase import create_client, Client
 
-DB_PATH = Path(__file__).resolve().parent / "localvibe.db"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
 
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+if not SUPABASE_URL or not SUPABASE_SECRET_KEY:
+    raise RuntimeError("Supabase environment variables are missing")
+
+supabase: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SECRET_KEY
+)
+
 
 def init_db():
-    conn = get_connection()
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS enquiries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            email TEXT,
-            destination TEXT,
-            people TEXT,
-            dates TEXT,
-            message TEXT NOT NULL,
-            interest TEXT,
-            status TEXT NOT NULL DEFAULT 'NEW',
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    conn.commit()
-    conn.close()
+    # Supabase table is already created.
+    pass
+
 
 def create_enquiry(data):
-    conn = get_connection()
-    cur = conn.execute("""
-        INSERT INTO enquiries
-        (name, phone, email, destination, people, dates, message, interest)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        data["name"], data["phone"], data.get("email"), data.get("destination"),
-        data.get("people"), data.get("dates"), data["message"], data.get("interest")
-    ))
-    conn.commit()
-    item_id = cur.lastrowid
-    conn.close()
-    return item_id
+    response = (
+        supabase
+        .table("enquiries")
+        .insert({
+            "name": data["name"],
+            "phone": data["phone"],
+            "email": data.get("email"),
+            "destination": data.get("destination"),
+            "people": data.get("people"),
+            "travel_date": data.get("travel_date"),
+            "message": data.get("message"),
+            "interest": data.get("interest"),
+            "status": "new"
+        })
+        .execute()
+    )
+
+    if not response.data:
+        raise RuntimeError("Failed to create enquiry")
+
+    return response.data[0]
+
 
 def list_enquiries():
-    conn = get_connection()
-    rows = conn.execute("SELECT * FROM enquiries ORDER BY id DESC").fetchall()
-    conn.close()
-    return [dict(r) for r in rows]
+    response = (
+        supabase
+        .table("enquiries")
+        .select("*")
+        .order("id", desc=True)
+        .execute()
+    )
+
+    return response.data
+
 
 def update_status(item_id, status):
-    conn = get_connection()
-    conn.execute("UPDATE enquiries SET status=? WHERE id=?", (status, item_id))
-    conn.commit()
-    conn.close()
+    response = (
+        supabase
+        .table("enquiries")
+        .update({"status": status})
+        .eq("id", item_id)
+        .execute()
+    )
+
+    return response.data
