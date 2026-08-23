@@ -14,7 +14,6 @@ supabase: Client = create_client(
 
 
 def init_db():
-    # Supabase table is already created.
     pass
 
 
@@ -28,10 +27,10 @@ def create_enquiry(data):
             "email": data.get("email"),
             "destination": data.get("destination"),
             "people": data.get("people"),
-            "travel_date": data.get("travel_date"),
-            "message": data.get("message"),
+            "dates": data.get("dates"),
+            "message": data["message"],
             "interest": data.get("interest"),
-            "status": "new"
+            "status": "NEW"
         })
         .execute()
     )
@@ -39,7 +38,7 @@ def create_enquiry(data):
     if not response.data:
         raise RuntimeError("Failed to create enquiry")
 
-    return response.data[0]
+    return response.data[0]["id"]
 
 
 def list_enquiries():
