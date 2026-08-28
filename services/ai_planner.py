@@ -1,6 +1,8 @@
 import os
+import time
 
 from google import genai
+from google.genai import errors
 
 
 # =========================================================
@@ -13,6 +15,7 @@ if not GEMINI_API_KEY:
     raise RuntimeError(
         "GEMINI_API_KEY environment variable is missing"
     )
+
 
 client = genai.Client(
     api_key=GEMINI_API_KEY
@@ -39,29 +42,59 @@ def generate_travel_plan(
         ""
     )
 
+
+    # =====================================================
+    # BUILD INCLUDED EXPERIENCES
+    # =====================================================
+
     included_items = []
 
+
     if package.get("food"):
-        included_items.append("authentic local food")
+        included_items.append(
+            "authentic local food"
+        )
+
 
     if package.get("stay"):
-        included_items.append("local-style stay")
+        included_items.append(
+            "local-style stay"
+        )
+
 
     if package.get("camping"):
-        included_items.append("camping")
+        included_items.append(
+            "camping"
+        )
+
 
     if package.get("local_experience"):
-        included_items.append("local experiences")
+        included_items.append(
+            "local experiences"
+        )
+
 
     if package.get("transport"):
-        included_items.append("transport")
+        included_items.append(
+            "transport"
+        )
+
 
     if package.get("activities"):
-        included_items.append("local activities")
+        included_items.append(
+            "local activities"
+        )
 
 
     inclusions_text = ", ".join(
         included_items
+    )
+
+
+    interests_text = (
+        ", ".join(interests)
+        if interests
+        else "General local experience"
     )
 
 
@@ -75,12 +108,12 @@ You are the official TravelVibe AI Trip Planner.
 TravelVibe creates authentic local travel experiences
 across South India.
 
-The philosophy is:
+TravelVibe philosophy:
 
 "Explore Local. Set Your Budget. We'll Find Your Vibe."
 
-Create a personalized travel experience based ONLY
-on the information provided below.
+Create a personalized suggested travel experience
+based ONLY on the information provided below.
 
 TRAVELLER DETAILS
 
@@ -103,12 +136,14 @@ Preferred date:
 {preferred_date or "Flexible"}
 
 Interests:
-{", ".join(interests) if interests else "General local experience"}
+{interests_text}
 
-TravelVibe experience available:
+TRAVELVIBE EXPERIENCE AVAILABLE:
+
 {experience}
 
-Included experiences:
+INCLUDED EXPERIENCES:
+
 {inclusions_text}
 
 IMPORTANT RULES:
@@ -119,10 +154,10 @@ IMPORTANT RULES:
 4. Do NOT mention internal package names or levels.
 5. Use the provided budget only.
 6. Do not promise anything that was not provided.
-7. Present this as a suggested experience, not a confirmed booking.
+7. Present this as a suggested experience.
 8. Keep the experience authentic and focused on local culture.
-9. If something cannot be confirmed, say that TravelVibe
-   will confirm it with the traveller.
+9. If something cannot be confirmed, say TravelVibe will
+   confirm it with the traveller.
 10. Do not make unrealistic claims.
 
 Create the response in this format:
@@ -142,21 +177,16 @@ Day 1:
 - Local experiences
 - Food/culture
 
-Day 2:
-- Activities
-- Local experiences
-- Food/culture
-
-Continue for additional days when necessary.
+Continue for all requested days.
 
 🍛 What You Can Experience
 
-List the relevant experiences.
+List the relevant included experiences.
 
 💰 Your Budget
 
-Explain that the requested experience fits the
-traveller's approximate budget.
+Explain that the suggested experience is designed
+around the traveller's provided budget.
 
 🤝 What Happens Next
 
@@ -170,13 +200,98 @@ Finish with:
 
 
     # =====================================================
-    # GEMINI REQUEST
+    # GEMINI REQUEST WITH RETRIES
     # =====================================================
 
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt
-    )
+    max_attempts = 3
+
+    for attempt in range(max_attempts):
+
+        try:
+
+            response = client.models.generate_content(
+
+                model="gemini-3.6-flash",
+
+                contents=prompt
+
+            )
 
 
-    return response.text
+            if response and response.text:
+
+                return response.text
+
+
+            return (
+                "🌴 YOUR TRAVELVIBE\n\n"
+                "We have created your TravelVibe "
+                "experience based on your destination, "
+                "budget and interests.\n\n"
+                "TravelVibe will contact you to confirm "
+                "the detailed itinerary and arrangements.\n\n"
+                "Don't just visit. Live the place. 🌴"
+            )
+
+
+        except errors.ServerError as error:
+
+            # -------------------------------------------------
+            # Gemini temporary server problem
+            # -------------------------------------------------
+
+            print(
+                f"Gemini server error "
+                f"(attempt {attempt + 1}/{max_attempts}): "
+                f"{error}"
+            )
+
+
+            if attempt < max_attempts - 1:
+
+                # Wait before retrying.
+                time.sleep(
+                    2 ** attempt
+                )
+
+                continue
+
+
+            # -------------------------------------------------
+            # All retries failed
+            # -------------------------------------------------
+
+            return (
+                "🌴 YOUR TRAVELVIBE\n\n"
+                f"We've received your requirements for "
+                f"{destination}.\n\n"
+                f"Your trip is for {travellers} traveller(s) "
+                f"for {days} day(s), with a total budget of "
+                f"₹{total_budget:,.0f}.\n\n"
+                "Our AI planner is temporarily busy. "
+                "TravelVibe will confirm your personalized "
+                "itinerary and arrangements with you.\n\n"
+                "Don't just visit. Live the place. 🌴"
+            )
+
+
+        except Exception as error:
+
+            # -------------------------------------------------
+            # Unexpected Gemini error
+            # -------------------------------------------------
+
+            print(
+                f"Gemini unexpected error: {error}"
+            )
+
+
+            return (
+                "🌴 YOUR TRAVELVIBE\n\n"
+                f"We've received your requirements for "
+                f"{destination}.\n\n"
+                "Your TravelVibe experience is being "
+                "prepared. Our team will confirm the "
+                "final itinerary and arrangements with you.\n\n"
+                "Don't just visit. Live the place. 🌴"
+            )
