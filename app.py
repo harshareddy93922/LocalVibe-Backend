@@ -1,12 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from routes.enquiries import router as enquiries_router
 from routes.destinations import router as destinations_router
 from routes.experiences import router as experiences_router
 from routes.admin import router as admin_router
+from routes.planner import router as planner_router
+
 from database.database import init_db
 
-app = FastAPI(title="LocalVibe API", version="2.0.0")
+
+app = FastAPI(
+    title="TravelVibe API",
+    version="3.0.0"
+)
+
+
+# =========================================================
+# CORS
+# =========================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -16,17 +28,66 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# =========================================================
+# DATABASE
+# =========================================================
+
 init_db()
 
-app.include_router(enquiries_router, prefix="/api")
-app.include_router(destinations_router, prefix="/api")
-app.include_router(experiences_router, prefix="/api")
-app.include_router(admin_router, prefix="/api")
+
+# =========================================================
+# API ROUTES
+# =========================================================
+
+app.include_router(
+    enquiries_router,
+    prefix="/api"
+)
+
+app.include_router(
+    destinations_router,
+    prefix="/api"
+)
+
+app.include_router(
+    experiences_router,
+    prefix="/api"
+)
+
+app.include_router(
+    admin_router,
+    prefix="/api"
+)
+
+# NEW: TravelVibe AI Planner
+app.include_router(
+    planner_router,
+    prefix="/api"
+)
+
+
+# =========================================================
+# ROOT
+# =========================================================
 
 @app.get("/")
 def root():
-    return {"app": "LocalVibe API", "status": "running"}
+
+    return {
+        "app": "TravelVibe API",
+        "status": "running",
+        "version": "3.0.0"
+    }
+
+
+# =========================================================
+# HEALTH CHECK
+# =========================================================
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+
+    return {
+        "status": "ok"
+    }
