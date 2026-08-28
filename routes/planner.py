@@ -2,9 +2,19 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from database.database import find_travel_package
-from services.ai_planner import generate_travel_plan
+from database.database import (
+    find_travel_package,
+    find_next_travel_package
+)
 
+from services.ai_planner import (
+    generate_travel_plan
+)
+
+
+# =========================================================
+# ROUTER
+# =========================================================
 
 router = APIRouter(
     prefix="/planner",
@@ -47,154 +57,306 @@ class PlannerRequest(BaseModel):
 
 
 # =========================================================
-# TRAVELVIBE AI PLANNER
+# RECOMMEND TRIP
 # =========================================================
 
 @router.post("/recommend")
-def recommend_trip(request: PlannerRequest):
+def recommend_trip(
+    request: PlannerRequest
+):
 
-    # -----------------------------------------------------
-    # 1. Calculate budget per person
-    # -----------------------------------------------------
+    # =====================================================
+    # 1. CALCULATE BUDGET PER PERSON
+    # =====================================================
 
     budget_per_person = (
-        request.budget / request.travellers
+        request.budget /
+        request.travellers
     )
 
 
-    # -----------------------------------------------------
-    # 2. Find matching package from Supabase
-    # -----------------------------------------------------
+    # =====================================================
+    # 2. FIND EXACT PACKAGE
+    # =====================================================
 
     package = find_travel_package(
+
         request.destination,
+
         budget_per_person,
+
         request.days
+
     )
 
 
-    # -----------------------------------------------------
-    # 3. No suitable package
-    # -----------------------------------------------------
+    # =====================================================
+    # 3. IF NO EXACT PACKAGE
+    # =====================================================
 
     if not package:
+
+        # -------------------------------------------------
+        # Look for next suitable package
+        # -------------------------------------------------
+
+        next_package = find_next_travel_package(
+
+            request.destination,
+
+            budget_per_person,
+
+            request.days
+
+        )
+
+
+        # -------------------------------------------------
+        # A suitable higher-budget package exists
+        # -------------------------------------------------
+
+        if next_package:
+
+            recommended_budget_per_person = float(
+                next_package.get(
+                    "min_budget_per_person",
+                    0
+                )
+            )
+
+
+            recommended_total_budget = (
+                recommended_budget_per_person
+                * request.travellers
+            )
+
+
+            return {
+
+                "success": False,
+
+                "budget_match": False,
+
+                "destination":
+                    request.destination,
+
+                "travellers":
+                    request.travellers,
+
+                "days":
+                    request.days,
+
+                "total_budget":
+                    request.budget,
+
+                "budget_per_person":
+                    round(
+                        budget_per_person
+                    ),
+
+                "recommended_budget":
+                    round(
+                        recommended_total_budget
+                    ),
+
+                "recommended_budget_per_person":
+                    round(
+                        recommended_budget_per_person
+                    ),
+
+                "preferred_date":
+                    request.preferred_date,
+
+                "interests":
+                    request.interests,
+
+                "experience":
+                    next_package.get(
+                        "description",
+                        ""
+                    ),
+
+                "message":
+                    "You're close! 🌿 "
+                    "Your current budget may not "
+                    "cover the full TravelVibe "
+                    "experience you're looking for. "
+                    "Based on your requirements, "
+                    "we recommend approximately "
+                    f"₹{recommended_total_budget:,.0f} "
+                    "for this experience."
+
+            }
+
+
+        # -------------------------------------------------
+        # No package at all
+        # -------------------------------------------------
 
         return {
 
             "success": False,
 
-            "destination": request.destination,
+            "budget_match": False,
 
-            "travellers": request.travellers,
+            "destination":
+                request.destination,
 
-            "days": request.days,
+            "travellers":
+                request.travellers,
 
-            "total_budget": request.budget,
+            "days":
+                request.days,
 
-            "budget_per_person": round(
-                budget_per_person
-            ),
+            "total_budget":
+                request.budget,
 
-            "preferred_date": request.preferred_date,
+            "budget_per_person":
+                round(
+                    budget_per_person
+                ),
 
-            "interests": request.interests,
+            "preferred_date":
+                request.preferred_date,
+
+            "interests":
+                request.interests,
 
             "message":
-                "Your current budget may not be enough "
-                "for the experience you're looking for. "
-                "We can suggest a suitable budget or "
-                "alternative experience."
+                "We couldn't find a suitable "
+                "TravelVibe package for these "
+                "requirements yet. "
+                "Please contact us and we'll "
+                "explore a custom experience "
+                "for you."
+
         }
 
 
-    # -----------------------------------------------------
-    # 4. Generate personalized AI plan
-    # -----------------------------------------------------
+    # =====================================================
+    # 4. GENERATE AI PLAN
+    # =====================================================
 
     ai_plan = generate_travel_plan(
 
-        destination=request.destination,
+        destination=
+            request.destination,
 
-        travellers=request.travellers,
+        travellers=
+            request.travellers,
 
-        days=request.days,
+        days=
+            request.days,
 
-        total_budget=request.budget,
+        total_budget=
+            request.budget,
 
-        budget_per_person=budget_per_person,
+        budget_per_person=
+            budget_per_person,
 
-        preferred_date=request.preferred_date,
+        preferred_date=
+            request.preferred_date,
 
-        interests=request.interests,
+        interests=
+            request.interests,
 
-        package=package
+        package=
+            package
+
     )
 
 
-    # -----------------------------------------------------
-    # 5. Return TravelVibe result
-    # -----------------------------------------------------
+    # =====================================================
+    # 5. PREPARE INCLUDED EXPERIENCES
+    # =====================================================
+
+    includes = {
+
+        "food":
+            package.get(
+                "food",
+                False
+            ),
+
+        "stay":
+            package.get(
+                "stay",
+                False
+            ),
+
+        "camping":
+            package.get(
+                "camping",
+                False
+            ),
+
+        "local_experience":
+            package.get(
+                "local_experience",
+                False
+            ),
+
+        "transport":
+            package.get(
+                "transport",
+                False
+            ),
+
+        "activities":
+            package.get(
+                "activities",
+                False
+            )
+
+    }
+
+
+    # =====================================================
+    # 6. SUCCESS RESPONSE
+    # =====================================================
 
     return {
 
         "success": True,
 
-        "destination": request.destination,
+        "budget_match": True,
 
-        "travellers": request.travellers,
+        "destination":
+            request.destination,
 
-        "days": request.days,
+        "travellers":
+            request.travellers,
 
-        "total_budget": request.budget,
+        "days":
+            request.days,
 
-        "budget_per_person": round(
-            budget_per_person
-        ),
+        "total_budget":
+            request.budget,
 
-        "preferred_date": request.preferred_date,
-
-        "interests": request.interests,
-
-        "experience": package.get(
-            "description"
-        ),
-
-        "includes": {
-
-            "food": package.get(
-                "food",
-                False
+        "budget_per_person":
+            round(
+                budget_per_person
             ),
 
-            "stay": package.get(
-                "stay",
-                False
+        "preferred_date":
+            request.preferred_date,
+
+        "interests":
+            request.interests,
+
+        "experience":
+            package.get(
+                "description",
+                ""
             ),
 
-            "camping": package.get(
-                "camping",
-                False
-            ),
+        "includes":
+            includes,
 
-            "local_experience": package.get(
-                "local_experience",
-                False
-            ),
-
-            "transport": package.get(
-                "transport",
-                False
-            ),
-
-            "activities": package.get(
-                "activities",
-                False
-            )
-
-        },
-
-        "ai_plan": ai_plan,
+        "ai_plan":
+            ai_plan,
 
         "message":
             "Your TravelVibe plan is ready. 🌴"
+
     }
