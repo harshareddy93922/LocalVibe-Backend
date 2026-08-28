@@ -66,11 +66,16 @@ def recommend_trip(request: PlannerRequest):
     # Find matching package from Supabase
     # -----------------------------------------------------
 
-    package = find_travel_package(
-        request.destination,
-        budget_per_person,
-        request.days
-    )
+    ai_plan = generate_travel_plan(
+    destination=request.destination,
+    travellers=request.travellers,
+    days=request.days,
+    total_budget=request.budget,
+    budget_per_person=budget_per_person,
+    preferred_date=request.preferred_date,
+    interests=request.interests,
+    package=package
+)
 
 
     # -----------------------------------------------------
