@@ -47,14 +47,14 @@ class PlannerRequest(BaseModel):
 
 
 # =========================================================
-# TRAVELVIBE PLANNER
+# TRAVELVIBE AI PLANNER
 # =========================================================
 
 @router.post("/recommend")
 def recommend_trip(request: PlannerRequest):
 
     # -----------------------------------------------------
-    # Calculate budget per person
+    # 1. Calculate budget per person
     # -----------------------------------------------------
 
     budget_per_person = (
@@ -63,23 +63,18 @@ def recommend_trip(request: PlannerRequest):
 
 
     # -----------------------------------------------------
-    # Find matching package from Supabase
+    # 2. Find matching package from Supabase
     # -----------------------------------------------------
 
-    ai_plan = generate_travel_plan(
-    destination=request.destination,
-    travellers=request.travellers,
-    days=request.days,
-    total_budget=request.budget,
-    budget_per_person=budget_per_person,
-    preferred_date=request.preferred_date,
-    interests=request.interests,
-    package=package
-)
+    package = find_travel_package(
+        request.destination,
+        budget_per_person,
+        request.days
+    )
 
 
     # -----------------------------------------------------
-    # No suitable package found
+    # 3. No suitable package
     # -----------------------------------------------------
 
     if not package:
@@ -113,7 +108,31 @@ def recommend_trip(request: PlannerRequest):
 
 
     # -----------------------------------------------------
-    # Suitable package found
+    # 4. Generate personalized AI plan
+    # -----------------------------------------------------
+
+    ai_plan = generate_travel_plan(
+
+        destination=request.destination,
+
+        travellers=request.travellers,
+
+        days=request.days,
+
+        total_budget=request.budget,
+
+        budget_per_person=budget_per_person,
+
+        preferred_date=request.preferred_date,
+
+        interests=request.interests,
+
+        package=package
+    )
+
+
+    # -----------------------------------------------------
+    # 5. Return TravelVibe result
     # -----------------------------------------------------
 
     return {
@@ -174,7 +193,8 @@ def recommend_trip(request: PlannerRequest):
 
         },
 
+        "ai_plan": ai_plan,
+
         "message":
-            "Yes! We can create a TravelVibe "
-            "experience around your requirements."
+            "Your TravelVibe plan is ready. 🌴"
     }
