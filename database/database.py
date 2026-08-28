@@ -99,7 +99,7 @@ def update_status(item_id, status):
 
 
 # =========================================================
-# FIND TRAVELVIBE PACKAGE
+# FIND EXACT TRAVELVIBE PACKAGE
 # =========================================================
 
 def find_travel_package(
@@ -113,7 +113,10 @@ def find_travel_package(
         .table("travel_packages")
         .select("*")
         .eq("active", True)
-        .ilike("destination", destination)
+        .ilike(
+            "destination",
+            destination
+        )
         .lte(
             "min_budget_per_person",
             budget_per_person
@@ -126,7 +129,7 @@ def find_travel_package(
             "min_budget_per_person",
             desc=True
         )
-        .limit(10)
+        .limit(20)
         .execute()
     )
 
@@ -150,7 +153,9 @@ def find_travel_package(
         )
 
 
-        # Check maximum budget
+        # -------------------------------------------------
+        # Maximum budget
+        # -------------------------------------------------
 
         budget_ok = (
             max_budget is None
@@ -159,7 +164,9 @@ def find_travel_package(
         )
 
 
-        # Check maximum days
+        # -------------------------------------------------
+        # Maximum days
+        # -------------------------------------------------
 
         days_ok = (
             max_days is None
@@ -168,9 +175,115 @@ def find_travel_package(
         )
 
 
-        # If both conditions match
+        # -------------------------------------------------
+        # Exact package match
+        # -------------------------------------------------
 
         if budget_ok and days_ok:
+
+            return package
+
+
+    return None
+
+
+# =========================================================
+# FIND NEXT TRAVELVIBE PACKAGE
+# =========================================================
+#
+# Used when the customer's current budget does not
+# match an available package.
+#
+# Example:
+#
+# Customer:
+# ₹4,000/person
+#
+# Next package:
+# ₹5,000/person
+#
+# We can then tell the customer the approximate budget
+# required instead of simply saying "No".
+#
+# =========================================================
+
+def find_next_travel_package(
+    destination,
+    budget_per_person,
+    days
+):
+
+    response = (
+        supabase
+        .table("travel_packages")
+        .select("*")
+        .eq("active", True)
+        .ilike(
+            "destination",
+            destination
+        )
+        .lte(
+            "min_days",
+            days
+        )
+        .order(
+            "min_budget_per_person",
+            asc=True
+        )
+        .limit(20)
+        .execute()
+    )
+
+
+    if not response.data:
+        return None
+
+
+    # =====================================================
+    # FIND CHEAPEST PACKAGE ABOVE CURRENT BUDGET
+    # THAT SUPPORTS THE REQUESTED NUMBER OF DAYS
+    # =====================================================
+
+    for package in response.data:
+
+        max_days = package.get(
+            "max_days"
+        )
+
+
+        # -------------------------------------------------
+        # Check maximum days
+        # -------------------------------------------------
+
+        days_ok = (
+            max_days is None
+            or days
+            <= int(max_days)
+        )
+
+
+        if not days_ok:
+            continue
+
+
+        # -------------------------------------------------
+        # Package minimum budget
+        # -------------------------------------------------
+
+        min_budget = float(
+            package.get(
+                "min_budget_per_person",
+                0
+            )
+        )
+
+
+        # -------------------------------------------------
+        # Only return a package that costs more than
+        # the customer's current budget.
+        # -------------------------------------------------
+
+        if min_budget > budget_per_person:
 
             return package
 
