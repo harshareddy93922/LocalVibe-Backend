@@ -60,7 +60,7 @@ app.include_router(
     prefix="/api"
 )
 
-# NEW: TravelVibe AI Planner
+# TravelVibe AI Planner
 app.include_router(
     planner_router,
     prefix="/api"
