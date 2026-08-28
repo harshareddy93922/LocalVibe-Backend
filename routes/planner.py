@@ -2,6 +2,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
+from database.database import find_travel_package
+
 
 router = APIRouter(
     prefix="/planner",
@@ -44,7 +46,7 @@ class PlannerRequest(BaseModel):
 
 
 # =========================================================
-# AI PLANNER
+# TRAVELVIBE PLANNER
 # =========================================================
 
 @router.post("/recommend")
@@ -60,32 +62,52 @@ def recommend_trip(request: PlannerRequest):
 
 
     # -----------------------------------------------------
-    # Temporary package classification
-    #
-    # IMPORTANT:
-    # These are temporary example rules.
-    # Later we will move them into Supabase.
+    # Find matching package from Supabase
     # -----------------------------------------------------
 
-    if budget_per_person < 2500:
-
-        package_type = "basic"
-
-    elif budget_per_person < 4000:
-
-        package_type = "standard"
-
-    elif budget_per_person < 6000:
-
-        package_type = "comfort"
-
-    else:
-
-        package_type = "premium"
+    package = find_travel_package(
+        request.destination,
+        budget_per_person,
+        request.days
+    )
 
 
     # -----------------------------------------------------
-    # Prepare customer-facing response
+    # No suitable package found
+    # -----------------------------------------------------
+
+    if not package:
+
+        return {
+
+            "success": False,
+
+            "destination": request.destination,
+
+            "travellers": request.travellers,
+
+            "days": request.days,
+
+            "total_budget": request.budget,
+
+            "budget_per_person": round(
+                budget_per_person
+            ),
+
+            "preferred_date": request.preferred_date,
+
+            "interests": request.interests,
+
+            "message":
+                "Your current budget may not be enough "
+                "for the experience you're looking for. "
+                "We can suggest a suitable budget or "
+                "alternative experience."
+        }
+
+
+    # -----------------------------------------------------
+    # Suitable package found
     # -----------------------------------------------------
 
     return {
@@ -108,13 +130,45 @@ def recommend_trip(request: PlannerRequest):
 
         "interests": request.interests,
 
-        # Internal information for now.
-        # We will NOT send this to customers
-        # in the final version.
-        "internal_package": package_type,
+        "experience": package.get(
+            "description"
+        ),
+
+        "includes": {
+
+            "food": package.get(
+                "food",
+                False
+            ),
+
+            "stay": package.get(
+                "stay",
+                False
+            ),
+
+            "camping": package.get(
+                "camping",
+                False
+            ),
+
+            "local_experience": package.get(
+                "local_experience",
+                False
+            ),
+
+            "transport": package.get(
+                "transport",
+                False
+            ),
+
+            "activities": package.get(
+                "activities",
+                False
+            )
+
+        },
 
         "message":
-            "TravelVibe has received your trip "
-            "requirements and is preparing your "
-            "personalised experience."
+            "Yes! We can create a TravelVibe "
+            "experience around your requirements."
     }
