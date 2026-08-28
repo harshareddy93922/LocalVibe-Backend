@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 from database.database import find_travel_package
+from services.ai_planner import generate_travel_plan
 
 
 router = APIRouter(
