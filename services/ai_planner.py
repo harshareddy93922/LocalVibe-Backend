@@ -2,7 +2,6 @@ import os
 import time
 
 from google import genai
-from google.genai import errors
 
 
 # =========================================================
@@ -37,6 +36,10 @@ def generate_travel_plan(
     package
 ):
 
+    # =====================================================
+    # PACKAGE EXPERIENCE
+    # =====================================================
+
     experience = package.get(
         "description",
         ""
@@ -44,7 +47,7 @@ def generate_travel_plan(
 
 
     # =====================================================
-    # BUILD INCLUDED EXPERIENCES
+    # INCLUDED ITEMS
     # =====================================================
 
     included_items = []
@@ -90,6 +93,10 @@ def generate_travel_plan(
         included_items
     )
 
+
+    # =====================================================
+    # INTERESTS
+    # =====================================================
 
     interests_text = (
         ", ".join(interests)
@@ -200,14 +207,21 @@ Finish with:
 
 
     # =====================================================
-    # GEMINI REQUEST WITH RETRIES
+    # GEMINI REQUEST
     # =====================================================
 
     max_attempts = 3
 
+
     for attempt in range(max_attempts):
 
         try:
+
+            print(
+                f"TravelVibe Gemini request "
+                f"{attempt + 1}/{max_attempts}"
+            )
+
 
             response = client.models.generate_content(
 
@@ -218,80 +232,99 @@ Finish with:
             )
 
 
+            # =================================================
+            # CHECK RESPONSE
+            # =================================================
+
             if response and response.text:
+
+                print(
+                    "TravelVibe Gemini response received."
+                )
 
                 return response.text
 
 
-            return (
-                "🌴 YOUR TRAVELVIBE\n\n"
-                "We have created your TravelVibe "
-                "experience based on your destination, "
-                "budget and interests.\n\n"
-                "TravelVibe will contact you to confirm "
-                "the detailed itinerary and arrangements.\n\n"
-                "Don't just visit. Live the place. 🌴"
-            )
-
-
-        except errors.ServerError as error:
-
-            # -------------------------------------------------
-            # Gemini temporary server problem
-            # -------------------------------------------------
-
             print(
-                f"Gemini server error "
-                f"(attempt {attempt + 1}/{max_attempts}): "
-                f"{error}"
-            )
-
-
-            if attempt < max_attempts - 1:
-
-                # Wait before retrying.
-                time.sleep(
-                    2 ** attempt
-                )
-
-                continue
-
-
-            # -------------------------------------------------
-            # All retries failed
-            # -------------------------------------------------
-
-            return (
-                "🌴 YOUR TRAVELVIBE\n\n"
-                f"We've received your requirements for "
-                f"{destination}.\n\n"
-                f"Your trip is for {travellers} traveller(s) "
-                f"for {days} day(s), with a total budget of "
-                f"₹{total_budget:,.0f}.\n\n"
-                "Our AI planner is temporarily busy. "
-                "TravelVibe will confirm your personalized "
-                "itinerary and arrangements with you.\n\n"
-                "Don't just visit. Live the place. 🌴"
+                "Gemini returned an empty response."
             )
 
 
         except Exception as error:
 
-            # -------------------------------------------------
-            # Unexpected Gemini error
-            # -------------------------------------------------
-
             print(
-                f"Gemini unexpected error: {error}"
+                f"Gemini error on attempt "
+                f"{attempt + 1}: {error}"
             )
 
 
-            return (
-                "🌴 YOUR TRAVELVIBE\n\n"
-                f"We've received your requirements for "
-                f"{destination}.\n\n"
-                "Your TravelVibe experience is being "
-                "prepared. Our team will confirm the "
-                "final itinerary and arrangements with you.\n\n"
-                "Don't just visit. Live the place. 🌴"
-            )
+            # =================================================
+            # RETRY
+            # =================================================
+
+            if attempt < max_attempts - 1:
+
+                wait_time = (
+                    2 ** attempt
+                )
+
+                print(
+                    f"Retrying Gemini in "
+                    f"{wait_time} seconds..."
+                )
+
+                time.sleep(
+                    wait_time
+                )
+
+                continue
+
+
+    # =====================================================
+    # GEMINI UNAVAILABLE FALLBACK
+    # =====================================================
+
+    print(
+        "Gemini unavailable after all attempts."
+    )
+
+
+    return f"""
+🌴 YOUR TRAVELVIBE
+
+We've received your travel requirements for
+{destination}.
+
+📍 Destination
+
+Your trip is planned around {destination},
+with a focus on your selected interests
+and local TravelVibe experiences.
+
+🗓️ Suggested Experience
+
+Your requested trip is for {days} day(s)
+and {travellers} traveller(s).
+
+🍛 What You Can Experience
+
+{inclusions_text or "Local experiences based on your preferences"}
+
+💰 Your Budget
+
+Your requested total budget is
+₹{total_budget:,.0f}.
+
+That's approximately
+₹{budget_per_person:,.0f} per person.
+
+🤝 What Happens Next
+
+Our AI planner is temporarily busy.
+
+Your requirements have been received.
+TravelVibe will confirm the final itinerary,
+availability and exact arrangements with you.
+
+Don't just visit. Live the place. 🌴
+"""
