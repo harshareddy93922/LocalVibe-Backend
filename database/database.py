@@ -63,3 +63,39 @@ def update_status(item_id, status):
     )
 
     return response.data
+    def find_travel_package(destination, budget_per_person, days):
+    response = (
+        supabase
+        .table("travel_packages")
+        .select("*")
+        .eq("active", True)
+        .ilike("destination", destination)
+        .lte("min_budget_per_person", budget_per_person)
+        .lte("min_days", days)
+        .order("min_budget_per_person", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if not response.data:
+        return None
+
+    # Check maximum limits in Python
+    for package in response.data:
+        max_budget = package.get("max_budget_per_person")
+        max_days = package.get("max_days")
+
+        budget_ok = (
+            max_budget is None
+            or budget_per_person <= float(max_budget)
+        )
+
+        days_ok = (
+            max_days is None
+            or days <= int(max_days)
+        )
+
+        if budget_ok and days_ok:
+            return package
+
+    return None
