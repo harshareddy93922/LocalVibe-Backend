@@ -61,9 +61,7 @@ class PlannerRequest(BaseModel):
 # =========================================================
 
 @router.post("/recommend")
-def recommend_trip(
-    request: PlannerRequest
-):
+def recommend_trip(request: PlannerRequest):
 
     # =====================================================
     # 1. CALCULATE BUDGET PER PERSON
@@ -76,7 +74,7 @@ def recommend_trip(
 
 
     # =====================================================
-    # 2. FIND EXACT PACKAGE
+    # 2. FIND EXACT TRAVELVIBE PACKAGE
     # =====================================================
 
     package = find_travel_package(
@@ -91,144 +89,84 @@ def recommend_trip(
 
 
     # =====================================================
-    # 3. IF NO EXACT PACKAGE
+    # 3. PREPARE PACKAGE INFORMATION
     # =====================================================
 
-    if not package:
+    # If TravelVibe already has a matching package,
+    # Gemini will use that verified TravelVibe information.
 
-        # -------------------------------------------------
-        # Look for next suitable package
-        # -------------------------------------------------
+    # If no package exists, Gemini will still create
+    # a destination-based suggestion using Google Search.
 
-        next_package = find_next_travel_package(
+    if package:
 
-            request.destination,
+        budget_match = True
 
-            budget_per_person,
-
-            request.days
-
+        experience = package.get(
+            "description",
+            ""
         )
 
+        includes = {
 
-        # -------------------------------------------------
-        # A suitable higher-budget package exists
-        # -------------------------------------------------
+            "food": package.get(
+                "food",
+                False
+            ),
 
-        if next_package:
+            "stay": package.get(
+                "stay",
+                False
+            ),
 
-            recommended_budget_per_person = float(
-                next_package.get(
-                    "min_budget_per_person",
-                    0
-                )
+            "camping": package.get(
+                "camping",
+                False
+            ),
+
+            "local_experience": package.get(
+                "local_experience",
+                False
+            ),
+
+            "transport": package.get(
+                "transport",
+                False
+            ),
+
+            "activities": package.get(
+                "activities",
+                False
             )
 
+        }
 
-            recommended_total_budget = (
-                recommended_budget_per_person
-                * request.travellers
-            )
+    else:
 
+        # No predefined TravelVibe package.
+        # Gemini will create a suggested experience.
 
-            return {
+        budget_match = False
 
-                "success": False,
+        experience = (
+            "AI-generated local travel experience "
+            "based on the destination, budget, "
+            "travel dates and interests."
+        )
 
-                "budget_match": False,
+        includes = {
 
-                "destination":
-                    request.destination,
+            "food": False,
 
-                "travellers":
-                    request.travellers,
+            "stay": False,
 
-                "days":
-                    request.days,
+            "camping": False,
 
-                "total_budget":
-                    request.budget,
+            "local_experience": False,
 
-                "budget_per_person":
-                    round(
-                        budget_per_person
-                    ),
+            "transport": False,
 
-                "recommended_budget":
-                    round(
-                        recommended_total_budget
-                    ),
-
-                "recommended_budget_per_person":
-                    round(
-                        recommended_budget_per_person
-                    ),
-
-                "preferred_date":
-                    request.preferred_date,
-
-                "interests":
-                    request.interests,
-
-                "experience":
-                    next_package.get(
-                        "description",
-                        ""
-                    ),
-
-                "message":
-                    "You're close! 🌿 "
-                    "Your current budget may not "
-                    "cover the full TravelVibe "
-                    "experience you're looking for. "
-                    "Based on your requirements, "
-                    "we recommend approximately "
-                    f"₹{recommended_total_budget:,.0f} "
-                    "for this experience."
-
-            }
-
-
-        # -------------------------------------------------
-        # No package at all
-        # -------------------------------------------------
-
-        return {
-
-            "success": False,
-
-            "budget_match": False,
-
-            "destination":
-                request.destination,
-
-            "travellers":
-                request.travellers,
-
-            "days":
-                request.days,
-
-            "total_budget":
-                request.budget,
-
-            "budget_per_person":
-                round(
-                    budget_per_person
-                ),
-
-            "preferred_date":
-                request.preferred_date,
-
-            "interests":
-                request.interests,
-
-            "message":
-                "We couldn't find a suitable "
-                "TravelVibe package for these "
-                "requirements yet. "
-                "Please contact us and we'll "
-                "explore a custom experience "
-                "for you."
+            "activities": False
 
         }
 
@@ -267,59 +205,15 @@ def recommend_trip(
 
 
     # =====================================================
-    # 5. PREPARE INCLUDED EXPERIENCES
-    # =====================================================
-
-    includes = {
-
-        "food":
-            package.get(
-                "food",
-                False
-            ),
-
-        "stay":
-            package.get(
-                "stay",
-                False
-            ),
-
-        "camping":
-            package.get(
-                "camping",
-                False
-            ),
-
-        "local_experience":
-            package.get(
-                "local_experience",
-                False
-            ),
-
-        "transport":
-            package.get(
-                "transport",
-                False
-            ),
-
-        "activities":
-            package.get(
-                "activities",
-                False
-            )
-
-    }
-
-
-    # =====================================================
-    # 6. SUCCESS RESPONSE
+    # 5. SUCCESS RESPONSE
     # =====================================================
 
     return {
 
         "success": True,
 
-        "budget_match": True,
+        "budget_match":
+            budget_match,
 
         "destination":
             request.destination,
@@ -345,10 +239,7 @@ def recommend_trip(
             request.interests,
 
         "experience":
-            package.get(
-                "description",
-                ""
-            ),
+            experience,
 
         "includes":
             includes,
