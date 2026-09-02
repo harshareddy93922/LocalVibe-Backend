@@ -1,304 +1,360 @@
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
-from typing import List, Optional
+import os
 
-from database.database import (
-    find_travel_package
+from google import genai
+from google.genai import types
+
+
+# =========================================================
+# GEMINI CLIENT
+# =========================================================
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY environment variable is missing"
+    )
+
+client = genai.Client(
+    api_key=GEMINI_API_KEY
 )
 
-from services.ai_planner import (
-    generate_travel_plan
-)
-
 
 # =========================================================
-# ROUTER
+# TRAVELVIBE AI PLANNER
 # =========================================================
 
-router = APIRouter(
-    prefix="/planner",
-    tags=["TravelVibe AI Planner"]
-)
-
-
-# =========================================================
-# REQUEST MODEL
-# =========================================================
-
-class PlannerRequest(BaseModel):
-
-    destination: str = Field(
-        ...,
-        min_length=2,
-        max_length=150
-    )
-
-    travellers: int = Field(
-        ...,
-        ge=1,
-        le=100
-    )
-
-    days: int = Field(
-        ...,
-        ge=1,
-        le=30
-    )
-
-    budget: float = Field(
-        ...,
-        gt=0
-    )
-
-    preferred_date: Optional[str] = None
-
-    interests: List[str] = []
-
-
-# =========================================================
-# RECOMMEND TRIP
-# =========================================================
-
-@router.post("/recommend")
-def recommend_trip(
-    request: PlannerRequest
+def generate_travel_plan(
+    destination,
+    travellers,
+    days,
+    total_budget,
+    budget_per_person,
+    preferred_date,
+    interests,
+    package=None
 ):
 
     # =====================================================
-    # 1. CALCULATE BUDGET PER PERSON
+    # SAFELY HANDLE MISSING PACKAGE
     # =====================================================
 
-    budget_per_person = (
-        request.budget /
-        request.travellers
+    package = package or {}
+
+    experience = package.get(
+        "description",
+        "No specific TravelVibe package is currently available."
+    )
+
+    included_items = []
+
+    if package.get("food"):
+        included_items.append(
+            "authentic local food"
+        )
+
+    if package.get("stay"):
+        included_items.append(
+            "local-style stay"
+        )
+
+    if package.get("camping"):
+        included_items.append(
+            "camping"
+        )
+
+    if package.get("local_experience"):
+        included_items.append(
+            "local experiences"
+        )
+
+    if package.get("transport"):
+        included_items.append(
+            "transport"
+        )
+
+    if package.get("activities"):
+        included_items.append(
+            "local activities"
+        )
+
+    inclusions_text = (
+        ", ".join(included_items)
+        if included_items
+        else "No predefined TravelVibe package"
     )
 
 
     # =====================================================
-    # 2. FIND TRAVELVIBE PACKAGE
+    # AI PROMPT
+    # =====================================================
+
+    prompt = f"""
+You are the official TravelVibe AI Trip Planner.
+
+TravelVibe is a budget-first travel planning platform
+focused on authentic local experiences in India.
+
+The philosophy is:
+
+"Explore Local. Set Your Budget. We'll Find Your Vibe."
+
+
+=========================================================
+YOUR ROLE
+=========================================================
+
+Create a useful, realistic and personalized travel
+suggestion based on the traveller's destination,
+number of travellers, number of days, budget,
+preferred date and interests.
+
+A destination does NOT need to exist in the TravelVibe
+database.
+
+If there is no predefined TravelVibe package, still
+create a useful suggested itinerary using reliable
+destination information obtained through Google Search.
+
+
+=========================================================
+GOOGLE SEARCH
+=========================================================
+
+You have access to Google Search.
+
+Use Google Search when appropriate to research:
+
+- destination information
+- attractions
+- local culture
+- local food
+- things to do
+- nature experiences
+- villages
+- historical places
+- travel conditions
+- publicly available destination information
+- current information that may have changed
+
+Do not invent destination facts.
+
+Prefer reliable and current information.
+
+
+=========================================================
+TRAVELLER DETAILS
+=========================================================
+
+Destination:
+{destination}
+
+Number of travellers:
+{travellers}
+
+Number of days:
+{days}
+
+Total budget:
+₹{total_budget}
+
+Budget per person:
+₹{budget_per_person}
+
+Preferred date:
+{preferred_date or "Flexible"}
+
+Interests:
+{", ".join(interests) if interests else "General local experience"}
+
+
+=========================================================
+TRAVELVIBE INFORMATION
+=========================================================
+
+TravelVibe experience:
+
+{experience}
+
+TravelVibe included services:
+
+{inclusions_text}
+
+
+=========================================================
+IMPORTANT RULES
+=========================================================
+
+1. The customer's budget is the PRIMARY constraint.
+
+2. Prefer affordable experiences.
+
+3. Prefer authentic local experiences over generic
+   tourist recommendations when appropriate.
+
+4. Consider the traveller's interests carefully.
+
+5. Use Google Search for destination facts when necessary.
+
+6. Do NOT invent destination facts.
+
+7. Do NOT invent exact hotel availability.
+
+8. Do NOT invent booking confirmations.
+
+9. Do NOT claim TravelVibe has a local partner unless
+   that information is explicitly provided.
+
+10. Do NOT invent exact prices.
+
+11. If publicly listed prices are found through Google
+    Search, describe them as approximate or publicly
+    listed prices.
+
+12. Do NOT guarantee that the complete trip fits the
+    requested budget unless the available information
+    supports that conclusion.
+
+13. If the requested budget appears tight, prioritize
+    lower-cost activities and explain that final pricing
+    must be confirmed.
+
+14. If the destination has no TravelVibe package, still
+    create a useful suggested itinerary.
+
+15. Do NOT expose internal database information.
+
+16. Do NOT expose internal package names.
+
+17. Do NOT claim an experience is confirmed.
+
+18. Clearly tell the traveller that TravelVibe will
+    confirm final prices, availability and arrangements.
+
+19. The itinerary is a SUGGESTION, not a booking.
+
+20. Do not stop simply because a TravelVibe package
+    does not exist.
+
+
+=========================================================
+CREATE THE RESPONSE
+=========================================================
+
+Create a personalized TravelVibe itinerary.
+
+
+🌴 YOUR TRAVELVIBE
+
+Write a short welcoming sentence.
+
+
+📍 Destination
+
+Give a useful description of the destination based on
+reliable information.
+
+
+🗓️ Suggested Experience
+
+Day 1:
+- Places to explore
+- Local experiences
+- Food/culture
+
+Day 2:
+- Places to explore
+- Local experiences
+- Food/culture
+
+Continue for the remaining days.
+
+
+🍛 What You Can Experience
+
+List the most relevant experiences based on the
+traveller's interests.
+
+
+💰 Your Budget
+
+Explain how the suggested experience relates to the
+traveller's requested budget.
+
+Do not invent a detailed cost breakdown unless reliable
+public pricing information is available.
+
+
+🌿 Why This Fits Your Vibe
+
+Explain how the itinerary matches the traveller's
+interests.
+
+
+🤝 What Happens Next
+
+Tell the traveller that TravelVibe will confirm the
+final itinerary, availability, exact prices and
+arrangements.
+
+
+Finish with exactly:
+
+"Don't just visit. Live the place. 🌴"
+"""
+
+
+    # =====================================================
+    # GOOGLE SEARCH GROUNDING
+    # =====================================================
+
+    grounding_tool = types.Tool(
+        google_search=types.GoogleSearch()
+    )
+
+    config = types.GenerateContentConfig(
+        tools=[
+            grounding_tool
+        ]
+    )
+
+
+    # =====================================================
+    # GEMINI REQUEST
     # =====================================================
 
     try:
 
-        package = find_travel_package(
-
-            request.destination,
-
-            budget_per_person,
-
-            request.days
-
+        response = client.models.generate_content(
+            model="gemini-3.6-flash",
+            contents=prompt,
+            config=config
         )
 
     except Exception as e:
 
         print(
-            "SUPABASE PACKAGE SEARCH ERROR:",
+            "GEMINI API ERROR:",
             repr(e)
         )
 
-        package = None
+        raise
 
 
     # =====================================================
-    # 3. PREPARE PACKAGE INFORMATION
+    # RESPONSE CHECK
     # =====================================================
 
-    if package:
+    if not response:
 
-        budget_match = True
-
-        experience = package.get(
-            "description",
-            ""
+        raise RuntimeError(
+            "Gemini returned an empty response"
         )
 
-        includes = {
+    if not response.text:
 
-            "food": package.get(
-                "food",
-                False
-            ),
-
-            "stay": package.get(
-                "stay",
-                False
-            ),
-
-            "camping": package.get(
-                "camping",
-                False
-            ),
-
-            "local_experience": package.get(
-                "local_experience",
-                False
-            ),
-
-            "transport": package.get(
-                "transport",
-                False
-            ),
-
-            "activities": package.get(
-                "activities",
-                False
-            )
-
-        }
-
-    else:
-
-        budget_match = False
-
-        experience = (
-            "AI-generated local travel experience "
-            "based on the destination, budget, "
-            "travel dates and interests."
+        raise RuntimeError(
+            "Gemini returned no text in the response"
         )
 
-        includes = {
-
-            "food": False,
-
-            "stay": False,
-
-            "camping": False,
-
-            "local_experience": False,
-
-            "transport": False,
-
-            "activities": False
-
-        }
-
-
-    # =====================================================
-    # 4. GENERATE AI PLAN
-    # =====================================================
-
-    try:
-
-        ai_plan = generate_travel_plan(
-
-            destination=
-                request.destination,
-
-            travellers=
-                request.travellers,
-
-            days=
-                request.days,
-
-            total_budget=
-                request.budget,
-
-            budget_per_person=
-                budget_per_person,
-
-            preferred_date=
-                request.preferred_date,
-
-            interests=
-                request.interests,
-
-            package=
-                package
-
-        )
-
-    except Exception as e:
-
-        # -------------------------------------------------
-        # PRINT ACTUAL ERROR TO RENDER LOGS
-        # -------------------------------------------------
-
-        print(
-            "AI PLANNER ERROR:",
-            repr(e)
-        )
-
-        return {
-
-            "success": False,
-
-            "error":
-                "AI planner failed",
-
-            "details":
-                str(e),
-
-            "destination":
-                request.destination,
-
-            "travellers":
-                request.travellers,
-
-            "days":
-                request.days,
-
-            "total_budget":
-                request.budget,
-
-            "budget_per_person":
-                round(
-                    budget_per_person
-                ),
-
-            "preferred_date":
-                request.preferred_date,
-
-            "interests":
-                request.interests
-
-        }
-
-
-    # =====================================================
-    # 5. SUCCESS RESPONSE
-    # =====================================================
-
-    return {
-
-        "success": True,
-
-        "budget_match":
-            budget_match,
-
-        "destination":
-            request.destination,
-
-        "travellers":
-            request.travellers,
-
-        "days":
-            request.days,
-
-        "total_budget":
-            request.budget,
-
-        "budget_per_person":
-            round(
-                budget_per_person
-            ),
-
-        "preferred_date":
-            request.preferred_date,
-
-        "interests":
-            request.interests,
-
-        "experience":
-            experience,
-
-        "includes":
-            includes,
-
-        "ai_plan":
-            ai_plan,
-
-        "message":
-            "Your TravelVibe plan is ready. 🌴"
-
-    }
+    return response.text
