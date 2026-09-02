@@ -1,7 +1,7 @@
 import os
-import time
 
 from google import genai
+from google.genai import types
 
 
 # =========================================================
@@ -33,22 +33,20 @@ def generate_travel_plan(
     budget_per_person,
     preferred_date,
     interests,
-    package
+    package=None
 ):
 
-    # =====================================================
-    # PACKAGE EXPERIENCE
-    # =====================================================
+    # -----------------------------------------------------
+    # Package information
+    # -----------------------------------------------------
+
+    package = package or {}
 
     experience = package.get(
         "description",
-        ""
+        "No specific TravelVibe package is currently available."
     )
 
-
-    # =====================================================
-    # INCLUDED ITEMS
-    # =====================================================
 
     included_items = []
 
@@ -58,30 +56,25 @@ def generate_travel_plan(
             "authentic local food"
         )
 
-
     if package.get("stay"):
         included_items.append(
             "local-style stay"
         )
-
 
     if package.get("camping"):
         included_items.append(
             "camping"
         )
 
-
     if package.get("local_experience"):
         included_items.append(
             "local experiences"
         )
 
-
     if package.get("transport"):
         included_items.append(
             "transport"
         )
-
 
     if package.get("activities"):
         included_items.append(
@@ -89,19 +82,10 @@ def generate_travel_plan(
         )
 
 
-    inclusions_text = ", ".join(
-        included_items
-    )
-
-
-    # =====================================================
-    # INTERESTS
-    # =====================================================
-
-    interests_text = (
-        ", ".join(interests)
-        if interests
-        else "General local experience"
+    inclusions_text = (
+        ", ".join(included_items)
+        if included_items
+        else "No predefined TravelVibe package"
     )
 
 
@@ -112,22 +96,47 @@ def generate_travel_plan(
     prompt = f"""
 You are the official TravelVibe AI Trip Planner.
 
-TravelVibe creates authentic local travel experiences
-across South India.
+TravelVibe is a budget-first travel planning platform
+focused on authentic local experiences in India.
 
-TravelVibe philosophy:
+The philosophy is:
 
 "Explore Local. Set Your Budget. We'll Find Your Vibe."
 
-Create a personalized suggested travel experience
-based ONLY on the information provided below.
+Your job is to create a useful and realistic travel
+experience for the traveller.
 
+IMPORTANT:
+
+You have access to Google Search.
+
+Use Google Search when you need information about:
+
+- the destination
+- attractions
+- local culture
+- local food
+- activities
+- travel conditions
+- places to visit
+- publicly available destination information
+- current information that may have changed
+
+Do NOT assume that a destination must exist in the
+TravelVibe database.
+
+A destination can be planned even when TravelVibe does
+not yet have a predefined package for it.
+
+
+=========================================================
 TRAVELLER DETAILS
+=========================================================
 
 Destination:
 {destination}
 
-Number of travellers:
+Travellers:
 {travellers}
 
 Number of days:
@@ -143,62 +152,126 @@ Preferred date:
 {preferred_date or "Flexible"}
 
 Interests:
-{interests_text}
+{", ".join(interests) if interests else "General local experience"}
 
-TRAVELVIBE EXPERIENCE AVAILABLE:
+
+=========================================================
+TRAVELVIBE DATABASE INFORMATION
+=========================================================
+
+Available TravelVibe experience:
 
 {experience}
 
-INCLUDED EXPERIENCES:
+Included TravelVibe services:
 
 {inclusions_text}
 
-IMPORTANT RULES:
 
-1. Do NOT invent prices.
-2. Do NOT invent availability.
-3. Do NOT invent a confirmed booking.
-4. Do NOT mention internal package names or levels.
-5. Use the provided budget only.
-6. Do not promise anything that was not provided.
-7. Present this as a suggested experience.
-8. Keep the experience authentic and focused on local culture.
-9. If something cannot be confirmed, say TravelVibe will
-   confirm it with the traveller.
-10. Do not make unrealistic claims.
+=========================================================
+IMPORTANT RULES
+=========================================================
 
-Create the response in this format:
+1. Use Google Search to research the destination when
+   necessary.
+
+2. Do NOT invent destination facts.
+
+3. Do NOT invent hotel availability.
+
+4. Do NOT invent booking confirmations.
+
+5. Do NOT claim that TravelVibe has a local partner unless
+   that information was provided.
+
+6. Do NOT invent exact prices.
+
+7. If current public prices are found through Google Search,
+   clearly describe them as publicly listed or approximate.
+
+8. Do NOT guarantee that the complete trip will fit the
+   requested budget unless the available information
+   supports that conclusion.
+
+9. The customer's budget is the PRIMARY constraint.
+
+10. Prefer affordable and authentic experiences.
+
+11. Prefer local food, local culture, nature, villages,
+    local stays and community experiences when relevant.
+
+12. If the destination has no TravelVibe package, still
+    create a useful suggested itinerary.
+
+13. Clearly tell the traveller that TravelVibe will confirm
+    final prices, availability and arrangements.
+
+14. Never expose internal database information or package
+    names.
+
+15. Do not stop simply because no TravelVibe package exists.
+
+
+=========================================================
+CREATE THE RESPONSE
+=========================================================
+
+Create a personalized itinerary.
+
+Use this format:
+
 
 🌴 YOUR TRAVELVIBE
 
 A short welcoming sentence.
 
+
 📍 Destination
 
-Brief description of the destination experience.
+Give a useful description of the destination based on
+reliable information.
+
 
 🗓️ Suggested Experience
 
 Day 1:
-- Activities
+- Places to explore
 - Local experiences
 - Food/culture
 
-Continue for all requested days.
+Day 2:
+- Places to explore
+- Local experiences
+- Food/culture
+
+Continue for additional days.
+
 
 🍛 What You Can Experience
 
-List the relevant included experiences.
+List the most relevant experiences.
+
 
 💰 Your Budget
 
-Explain that the suggested experience is designed
-around the traveller's provided budget.
+Explain how the suggested experience relates to the
+traveller's requested budget.
+
+Do NOT invent a detailed cost breakdown unless reliable
+pricing information is available.
+
+
+🌿 Why This Fits Your Vibe
+
+Explain how the itinerary matches the traveller's
+interests.
+
 
 🤝 What Happens Next
 
-Tell the traveller that TravelVibe will confirm
-the final itinerary, availability and exact arrangements.
+Tell the traveller that TravelVibe will confirm the final
+itinerary, availability, exact prices and arrangements.
+
 
 Finish with:
 
@@ -207,124 +280,42 @@ Finish with:
 
 
     # =====================================================
-    # GEMINI REQUEST
+    # GOOGLE SEARCH GROUNDING
     # =====================================================
 
-    max_attempts = 3
-
-
-    for attempt in range(max_attempts):
-
-        try:
-
-            print(
-                f"TravelVibe Gemini request "
-                f"{attempt + 1}/{max_attempts}"
-            )
-
-
-            response = client.models.generate_content(
-
-                model="gemini-3.6-flash",
-
-                contents=prompt
-
-            )
-
-
-            # =================================================
-            # CHECK RESPONSE
-            # =================================================
-
-            if response and response.text:
-
-                print(
-                    "TravelVibe Gemini response received."
-                )
-
-                return response.text
-
-
-            print(
-                "Gemini returned an empty response."
-            )
-
-
-        except Exception as error:
-
-            print(
-                f"Gemini error on attempt "
-                f"{attempt + 1}: {error}"
-            )
-
-
-            # =================================================
-            # RETRY
-            # =================================================
-
-            if attempt < max_attempts - 1:
-
-                wait_time = (
-                    2 ** attempt
-                )
-
-                print(
-                    f"Retrying Gemini in "
-                    f"{wait_time} seconds..."
-                )
-
-                time.sleep(
-                    wait_time
-                )
-
-                continue
-
-
-    # =====================================================
-    # GEMINI UNAVAILABLE FALLBACK
-    # =====================================================
-
-    print(
-        "Gemini unavailable after all attempts."
+    grounding_tool = types.Tool(
+        google_search=types.GoogleSearch()
     )
 
 
-    return f"""
-🌴 YOUR TRAVELVIBE
+    config = types.GenerateContentConfig(
+        tools=[
+            grounding_tool
+        ]
+    )
 
-We've received your travel requirements for
-{destination}.
 
-📍 Destination
+    # =====================================================
+    # GEMINI REQUEST
+    # =====================================================
 
-Your trip is planned around {destination},
-with a focus on your selected interests
-and local TravelVibe experiences.
+    response = client.models.generate_content(
+        model="gemini-3.6-flash",
+        contents=prompt,
+        config=config
+    )
 
-🗓️ Suggested Experience
 
-Your requested trip is for {days} day(s)
-and {travellers} traveller(s).
+    # =====================================================
+    # SAFETY CHECK
+    # =====================================================
 
-🍛 What You Can Experience
+    if not response.text:
 
-{inclusions_text or "Local experiences based on your preferences"}
+        return (
+            "We couldn't generate your TravelVibe plan "
+            "right now. Please try again."
+        )
 
-💰 Your Budget
 
-Your requested total budget is
-₹{total_budget:,.0f}.
-
-That's approximately
-₹{budget_per_person:,.0f} per person.
-
-🤝 What Happens Next
-
-Our AI planner is temporarily busy.
-
-Your requirements have been received.
-TravelVibe will confirm the final itinerary,
-availability and exact arrangements with you.
-
-Don't just visit. Live the place. 🌴
-"""
+    return response.text
