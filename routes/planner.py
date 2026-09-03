@@ -60,7 +60,7 @@ class PlannerRequest(BaseModel):
 
 
 # =========================================================
-# GET DESTINATIONS
+# GET AVAILABLE DESTINATIONS
 # =========================================================
 
 @router.get("/destinations")
@@ -75,28 +75,58 @@ def get_planner_destinations_api():
 
 
 # =========================================================
-# CREATE DATABASE ITINERARY FALLBACK
+# BUILD DATABASE ITINERARY
 # =========================================================
 
 def build_database_itinerary(
     destination,
+    travellers,
+    days,
+    total_budget,
+    budget_per_person,
     itinerary
 ):
+
+    # -----------------------------------------------------
+    # No itinerary available
+    # -----------------------------------------------------
 
     if not itinerary:
 
         return (
-            f"🌴 YOUR TRAVELVIBE\n\n"
-            f"We received your request for {destination}.\n\n"
-            "We are preparing a personalized experience "
-            "for your destination, budget and travel style.\n\n"
-            "TravelVibe will confirm the final itinerary, "
-            "availability and arrangements with you.\n\n"
+            "🌴 YOUR TRAVELVIBE\n\n"
+
+            f"We received your request for "
+            f"{destination}.\n\n"
+
+            f"👥 Travellers: {travellers}\n"
+
+            f"🗓️ Duration: {days} day(s)\n"
+
+            f"💰 Total budget: "
+            f"₹{total_budget:,.0f}\n"
+
+            f"💰 Budget per person: "
+            f"₹{budget_per_person:,.0f}\n\n"
+
+            "We are preparing a personalized "
+            "TravelVibe experience around your "
+            "destination, budget and travel style.\n\n"
+
+            "TravelVibe will confirm the final "
+            "itinerary, availability, pricing and "
+            "arrangements with you.\n\n"
+
             "Don't just visit. Live the place. 🌴"
         )
 
 
+    # -----------------------------------------------------
+    # Start building response
+    # -----------------------------------------------------
+
     lines = []
+
 
     lines.append(
         "🌴 YOUR TRAVELVIBE"
@@ -104,12 +134,38 @@ def build_database_itinerary(
 
     lines.append("")
 
+
     lines.append(
-        f"Here's a suggested {destination} "
-        "experience built around your requirements."
+        f"Here's your suggested {destination} "
+        "experience, built around your "
+        "requirements."
     )
 
     lines.append("")
+
+
+    lines.append(
+        "💰 Your Travel Budget"
+    )
+
+    lines.append("")
+
+
+    lines.append(
+        f"Total budget: ₹{total_budget:,.0f}"
+    )
+
+    lines.append(
+        f"Budget per person: "
+        f"₹{budget_per_person:,.0f}"
+    )
+
+    lines.append("")
+
+
+    # =====================================================
+    # SUGGESTED EXPERIENCE
+    # =====================================================
 
     lines.append(
         "🗓️ Suggested Experience"
@@ -119,7 +175,7 @@ def build_database_itinerary(
 
 
     # =====================================================
-    # BUILD EACH DAY
+    # DAY-BY-DAY ITINERARY
     # =====================================================
 
     for day in itinerary:
@@ -130,7 +186,7 @@ def build_database_itinerary(
         )
 
         lines.append(
-            f"Day {day_number}:"
+            f"Day {day_number}"
         )
 
 
@@ -158,41 +214,45 @@ def build_database_itinerary(
         if morning:
 
             lines.append(
-                f"- Morning: {morning}"
+                f"• Morning: {morning}"
             )
 
 
         if afternoon:
 
             lines.append(
-                f"- Afternoon: {afternoon}"
+                f"• Afternoon: {afternoon}"
             )
 
 
         if evening:
 
             lines.append(
-                f"- Evening: {evening}"
+                f"• Evening: {evening}"
             )
 
 
         if food:
 
             lines.append(
-                f"- Food: {food}"
+                f"• Food: {food}"
             )
 
 
         if local_experience:
 
             lines.append(
-                f"- Local experience: "
+                f"• Local experience: "
                 f"{local_experience}"
             )
 
 
         lines.append("")
 
+
+    # =====================================================
+    # WHAT YOU CAN EXPERIENCE
+    # =====================================================
 
     lines.append(
         "🍛 What You Can Experience"
@@ -201,11 +261,8 @@ def build_database_itinerary(
     lines.append("")
 
 
-    # =====================================================
-    # COLLECT UNIQUE FOOD / LOCAL EXPERIENCES
-    # =====================================================
-
     food_items = []
+
     local_items = []
 
 
@@ -220,7 +277,11 @@ def build_database_itinerary(
         )
 
 
-        if food and food not in food_items:
+        if (
+            food
+            and
+            food not in food_items
+        ):
 
             food_items.append(
                 food
@@ -241,18 +302,23 @@ def build_database_itinerary(
     for item in food_items:
 
         lines.append(
-            f"- {item}"
+            f"• {item}"
         )
 
 
     for item in local_items:
 
         lines.append(
-            f"- {item}"
+            f"• {item}"
         )
 
 
     lines.append("")
+
+
+    # =====================================================
+    # NEXT STEP
+    # =====================================================
 
     lines.append(
         "🤝 What Happens Next"
@@ -260,20 +326,24 @@ def build_database_itinerary(
 
     lines.append("")
 
+
     lines.append(
-        "TravelVibe will confirm the final itinerary, "
-        "availability, exact pricing and arrangements "
-        "with you."
+        "TravelVibe will confirm the final "
+        "itinerary, availability, exact pricing "
+        "and arrangements with you."
     )
 
     lines.append("")
+
 
     lines.append(
         "Don't just visit. Live the place. 🌴"
     )
 
 
-    return "\n".join(lines)
+    return "\n".join(
+        lines
+    )
 
 
 # =========================================================
@@ -296,7 +366,7 @@ def recommend_trip(
 
 
     # =====================================================
-    # 2. FIND TRAVELVIBE PACKAGE
+    # 2. FIND MATCHING TRAVELVIBE PACKAGE
     # =====================================================
 
     try:
@@ -340,12 +410,19 @@ def recommend_trip(
 
 
     # =====================================================
-    # 4. PREPARE PACKAGE INFORMATION
+    # 4. DETERMINE PACKAGE MATCH
+    # =====================================================
+
+    budget_match = (
+        package is not None
+    )
+
+
+    # =====================================================
+    # 5. PACKAGE DESCRIPTION
     # =====================================================
 
     if package:
-
-        budget_match = True
 
         experience = package.get(
             "description",
@@ -388,11 +465,9 @@ def recommend_trip(
 
     else:
 
-        budget_match = False
-
         experience = (
             "A personalized TravelVibe experience "
-            "based on the selected destination, "
+            "based on your selected destination, "
             "budget, duration and interests."
         )
 
@@ -414,17 +489,28 @@ def recommend_trip(
 
 
     # =====================================================
-    # 5. CREATE DATABASE FALLBACK FIRST
+    # 6. DATABASE FALLBACK PLAN
     # =====================================================
 
     database_plan = build_database_itinerary(
-        request.destination,
-        itinerary
+
+        destination=request.destination,
+
+        travellers=request.travellers,
+
+        days=request.days,
+
+        total_budget=request.budget,
+
+        budget_per_person=budget_per_person,
+
+        itinerary=itinerary
+
     )
 
 
     # =====================================================
-    # 6. TRY GEMINI
+    # 7. TRY GEMINI
     # =====================================================
 
     ai_plan = None
@@ -472,22 +558,20 @@ def recommend_trip(
 
 
     # =====================================================
-    # 7. CHOOSE FINAL PLAN
+    # 8. SELECT FINAL PLAN
     # =====================================================
 
-    final_plan = (
+    if ai_available:
 
-        ai_plan
+        final_plan = ai_plan
 
-        if ai_available
+    else:
 
-        else database_plan
-
-    )
+        final_plan = database_plan
 
 
     # =====================================================
-    # 8. RETURN RESULT
+    # 9. RETURN RESPONSE
     # =====================================================
 
     return {
