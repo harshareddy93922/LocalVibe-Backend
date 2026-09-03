@@ -75,6 +75,208 @@ def get_planner_destinations_api():
 
 
 # =========================================================
+# CREATE DATABASE ITINERARY FALLBACK
+# =========================================================
+
+def build_database_itinerary(
+    destination,
+    itinerary
+):
+
+    if not itinerary:
+
+        return (
+            f"🌴 YOUR TRAVELVIBE\n\n"
+            f"We received your request for {destination}.\n\n"
+            "We are preparing a personalized experience "
+            "for your destination, budget and travel style.\n\n"
+            "TravelVibe will confirm the final itinerary, "
+            "availability and arrangements with you.\n\n"
+            "Don't just visit. Live the place. 🌴"
+        )
+
+
+    lines = []
+
+    lines.append(
+        "🌴 YOUR TRAVELVIBE"
+    )
+
+    lines.append("")
+
+    lines.append(
+        f"Here's a suggested {destination} "
+        "experience built around your requirements."
+    )
+
+    lines.append("")
+
+    lines.append(
+        "🗓️ Suggested Experience"
+    )
+
+    lines.append("")
+
+
+    # =====================================================
+    # BUILD EACH DAY
+    # =====================================================
+
+    for day in itinerary:
+
+        day_number = day.get(
+            "day_number",
+            ""
+        )
+
+        lines.append(
+            f"Day {day_number}:"
+        )
+
+
+        morning = day.get(
+            "morning"
+        )
+
+        afternoon = day.get(
+            "afternoon"
+        )
+
+        evening = day.get(
+            "evening"
+        )
+
+        food = day.get(
+            "food"
+        )
+
+        local_experience = day.get(
+            "local_experience"
+        )
+
+
+        if morning:
+
+            lines.append(
+                f"- Morning: {morning}"
+            )
+
+
+        if afternoon:
+
+            lines.append(
+                f"- Afternoon: {afternoon}"
+            )
+
+
+        if evening:
+
+            lines.append(
+                f"- Evening: {evening}"
+            )
+
+
+        if food:
+
+            lines.append(
+                f"- Food: {food}"
+            )
+
+
+        if local_experience:
+
+            lines.append(
+                f"- Local experience: "
+                f"{local_experience}"
+            )
+
+
+        lines.append("")
+
+
+    lines.append(
+        "🍛 What You Can Experience"
+    )
+
+    lines.append("")
+
+
+    # =====================================================
+    # COLLECT UNIQUE FOOD / LOCAL EXPERIENCES
+    # =====================================================
+
+    food_items = []
+    local_items = []
+
+
+    for day in itinerary:
+
+        food = day.get(
+            "food"
+        )
+
+        local_experience = day.get(
+            "local_experience"
+        )
+
+
+        if food and food not in food_items:
+
+            food_items.append(
+                food
+            )
+
+
+        if (
+            local_experience
+            and
+            local_experience not in local_items
+        ):
+
+            local_items.append(
+                local_experience
+            )
+
+
+    for item in food_items:
+
+        lines.append(
+            f"- {item}"
+        )
+
+
+    for item in local_items:
+
+        lines.append(
+            f"- {item}"
+        )
+
+
+    lines.append("")
+
+    lines.append(
+        "🤝 What Happens Next"
+    )
+
+    lines.append("")
+
+    lines.append(
+        "TravelVibe will confirm the final itinerary, "
+        "availability, exact pricing and arrangements "
+        "with you."
+    )
+
+    lines.append("")
+
+    lines.append(
+        "Don't just visit. Live the place. 🌴"
+    )
+
+
+    return "\n".join(lines)
+
+
+# =========================================================
 # RECOMMEND TRIP
 # =========================================================
 
@@ -94,37 +296,51 @@ def recommend_trip(
 
 
     # =====================================================
-    # 2. FIND PACKAGE
+    # 2. FIND TRAVELVIBE PACKAGE
     # =====================================================
 
-    package = find_travel_package(
+    try:
 
-        request.destination,
+        package = find_travel_package(
+            request.destination,
+            budget_per_person,
+            request.days
+        )
 
-        budget_per_person,
+    except Exception as error:
 
-        request.days
+        print(
+            "PACKAGE SEARCH ERROR:",
+            repr(error)
+        )
 
-    )
-
-
-    # =====================================================
-    # 3. GET ITINERARY FROM DATABASE
-    # =====================================================
-
-    itinerary = get_travel_itinerary(
-
-        request.destination,
-
-        budget_per_person,
-
-        request.days
-
-    )
+        package = None
 
 
     # =====================================================
-    # 4. PACKAGE INFORMATION
+    # 3. GET DATABASE ITINERARY
+    # =====================================================
+
+    try:
+
+        itinerary = get_travel_itinerary(
+            request.destination,
+            budget_per_person,
+            request.days
+        )
+
+    except Exception as error:
+
+        print(
+            "ITINERARY SEARCH ERROR:",
+            repr(error)
+        )
+
+        itinerary = []
+
+
+    # =====================================================
+    # 4. PREPARE PACKAGE INFORMATION
     # =====================================================
 
     if package:
@@ -176,8 +392,8 @@ def recommend_trip(
 
         experience = (
             "A personalized TravelVibe experience "
-            "will be created based on the selected "
-            "destination, budget, duration and interests."
+            "based on the selected destination, "
+            "budget, duration and interests."
         )
 
         includes = {
@@ -198,38 +414,50 @@ def recommend_trip(
 
 
     # =====================================================
-    # 5. GENERATE AI PLAN
+    # 5. CREATE DATABASE FALLBACK FIRST
     # =====================================================
+
+    database_plan = build_database_itinerary(
+        request.destination,
+        itinerary
+    )
+
+
+    # =====================================================
+    # 6. TRY GEMINI
+    # =====================================================
+
+    ai_plan = None
+
+    ai_available = False
+
 
     try:
 
         ai_plan = generate_travel_plan(
 
-            destination=
-                request.destination,
+            destination=request.destination,
 
-            travellers=
-                request.travellers,
+            travellers=request.travellers,
 
-            days=
-                request.days,
+            days=request.days,
 
-            total_budget=
-                request.budget,
+            total_budget=request.budget,
 
-            budget_per_person=
-                budget_per_person,
+            budget_per_person=budget_per_person,
 
-            preferred_date=
-                request.preferred_date,
+            preferred_date=request.preferred_date,
 
-            interests=
-                request.interests,
+            interests=request.interests,
 
-            package=
-                package
+            package=package
 
         )
+
+        if ai_plan:
+
+            ai_available = True
+
 
     except Exception as error:
 
@@ -240,9 +468,26 @@ def recommend_trip(
 
         ai_plan = None
 
+        ai_available = False
+
 
     # =====================================================
-    # 6. RETURN RESULT
+    # 7. CHOOSE FINAL PLAN
+    # =====================================================
+
+    final_plan = (
+
+        ai_plan
+
+        if ai_available
+
+        else database_plan
+
+    )
+
+
+    # =====================================================
+    # 8. RETURN RESULT
     # =====================================================
 
     return {
@@ -251,6 +496,9 @@ def recommend_trip(
 
         "budget_match":
             budget_match,
+
+        "ai_available":
+            ai_available,
 
         "destination":
             request.destination,
@@ -285,7 +533,7 @@ def recommend_trip(
             itinerary,
 
         "ai_plan":
-            ai_plan,
+            final_plan,
 
         "message":
             "Your TravelVibe plan is ready. 🌴"
