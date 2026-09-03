@@ -289,3 +289,21 @@ def find_next_travel_package(
 
 
     return None
+    # =========================================================
+# LIST PLANNER DESTINATIONS
+# =========================================================
+
+def list_planner_destinations():
+
+    response = (
+        supabase
+        .table("planner_destinations")
+        .select("id, name, state")
+        .eq("active", True)
+        .order("name")
+        .execute()
+    )
+
+    return response.data
+
+
