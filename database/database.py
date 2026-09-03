@@ -584,17 +584,16 @@ def get_travel_itinerary(
             )
 
 
-            if (
-                destination_ok
-                and
-                budget_ok
-                and
-                days_ok
-            ):
-
-                matching_rows.append(
-                    item
-                )
+              if (
+    destination_ok
+    and
+    budget_ok
+    and
+    days_ok
+    and
+    int(item.get("day_number", 0)) <= days
+):
+    matching_rows.append(item)
 
 
         except (
