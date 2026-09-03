@@ -379,5 +379,122 @@ def list_planner_destinations():
     )
 
     return response.data
+    # =========================================================
+# GET TRAVEL ITINERARY
+# =========================================================
+
+def get_travel_itinerary(
+    destination,
+    budget_per_person,
+    days
+):
+
+    response = (
+        supabase
+        .table("travel_itineraries")
+        .select("*")
+        .eq(
+            "active",
+            True
+        )
+        .ilike(
+            "destination",
+            destination
+        )
+        .lte(
+            "min_budget_per_person",
+            budget_per_person
+        )
+        .order(
+            "min_budget_per_person",
+            desc=True
+        )
+        .execute()
+    )
+
+    if not response.data:
+        return []
+
+
+    matching_rows = []
+
+
+    for item in response.data:
+
+        min_budget = float(
+            item.get(
+                "min_budget_per_person",
+                0
+            )
+        )
+
+        max_budget = item.get(
+            "max_budget_per_person"
+        )
+
+        min_days = int(
+            item.get(
+                "min_days",
+                1
+            )
+        )
+
+        max_days = item.get(
+            "max_days"
+        )
+
+
+        # -------------------------------------------------
+        # Budget check
+        # -------------------------------------------------
+
+        budget_ok = (
+            budget_per_person >= min_budget
+            and
+            (
+                max_budget is None
+                or
+                budget_per_person <= float(max_budget)
+            )
+        )
+
+
+        # -------------------------------------------------
+        # Days check
+        # -------------------------------------------------
+
+        days_ok = (
+            days >= min_days
+            and
+            (
+                max_days is None
+                or
+                days <= int(max_days)
+            )
+        )
+
+
+        if budget_ok and days_ok:
+
+            matching_rows.append(
+                item
+            )
+
+
+    # -----------------------------------------------------
+    # Sort by day number
+    # -----------------------------------------------------
+
+    matching_rows.sort(
+        key=lambda x: int(
+            x.get(
+                "day_number",
+                0
+            )
+        )
+    )
+
+
+    return matching_rows
 
 
