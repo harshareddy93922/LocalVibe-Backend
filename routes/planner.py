@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from database.database import (
     find_travel_package,
-    find_next_travel_package
+    list_planner_destinations
 )
 
 from services.ai_planner import (
@@ -53,7 +53,24 @@ class PlannerRequest(BaseModel):
 
     preferred_date: Optional[str] = None
 
-    interests: List[str] = []
+    interests: List[str] = Field(
+        default_factory=list
+    )
+
+
+# =========================================================
+# GET PLANNER DESTINATIONS
+# =========================================================
+
+@router.get("/destinations")
+def get_planner_destinations():
+
+    destinations = list_planner_destinations()
+
+    return {
+        "success": True,
+        "destinations": destinations
+    }
 
 
 # =========================================================
@@ -61,7 +78,9 @@ class PlannerRequest(BaseModel):
 # =========================================================
 
 @router.post("/recommend")
-def recommend_trip(request: PlannerRequest):
+def recommend_trip(
+    request: PlannerRequest
+):
 
     # =====================================================
     # 1. CALCULATE BUDGET PER PERSON
@@ -74,29 +93,19 @@ def recommend_trip(request: PlannerRequest):
 
 
     # =====================================================
-    # 2. FIND EXACT TRAVELVIBE PACKAGE
+    # 2. FIND TRAVELVIBE PACKAGE
     # =====================================================
 
     package = find_travel_package(
-
         request.destination,
-
         budget_per_person,
-
         request.days
-
     )
 
 
     # =====================================================
-    # 3. PREPARE PACKAGE INFORMATION
+    # 3. PREPARE TRAVELVIBE DATA
     # =====================================================
-
-    # If TravelVibe already has a matching package,
-    # Gemini will use that verified TravelVibe information.
-
-    # If no package exists, Gemini will still create
-    # a destination-based suggestion using Google Search.
 
     if package:
 
@@ -144,14 +153,16 @@ def recommend_trip(request: PlannerRequest):
     else:
 
         # No predefined TravelVibe package.
-        # Gemini will create a suggested experience.
+        # The AI can still create a destination-based
+        # suggested itinerary.
 
         budget_match = False
 
         experience = (
-            "AI-generated local travel experience "
-            "based on the destination, budget, "
-            "travel dates and interests."
+            "No predefined TravelVibe package is currently "
+            "available for this destination. The AI will "
+            "create a suggested experience based on the "
+            "destination, budget, duration and interests."
         )
 
         includes = {
@@ -175,37 +186,71 @@ def recommend_trip(request: PlannerRequest):
     # 4. GENERATE AI PLAN
     # =====================================================
 
-    ai_plan = generate_travel_plan(
+    try:
 
-        destination=
-            request.destination,
+        ai_plan = generate_travel_plan(
 
-        travellers=
-            request.travellers,
+            destination=request.destination,
 
-        days=
-            request.days,
+            travellers=request.travellers,
 
-        total_budget=
-            request.budget,
+            days=request.days,
 
-        budget_per_person=
-            budget_per_person,
+            total_budget=request.budget,
 
-        preferred_date=
-            request.preferred_date,
+            budget_per_person=budget_per_person,
 
-        interests=
-            request.interests,
+            preferred_date=request.preferred_date,
 
-        package=
-            package
+            interests=request.interests,
 
-    )
+            package=package
+
+        )
+
+    except Exception as error:
+
+        print(
+            "AI PLANNER ERROR:",
+            repr(error)
+        )
+
+        return {
+
+            "success": False,
+
+            "error": "AI planner failed",
+
+            "details": str(error),
+
+            "destination":
+                request.destination,
+
+            "travellers":
+                request.travellers,
+
+            "days":
+                request.days,
+
+            "total_budget":
+                request.budget,
+
+            "budget_per_person":
+                round(
+                    budget_per_person
+                ),
+
+            "preferred_date":
+                request.preferred_date,
+
+            "interests":
+                request.interests
+
+        }
 
 
     # =====================================================
-    # 5. SUCCESS RESPONSE
+    # 5. RETURN RESULT
     # =====================================================
 
     return {
