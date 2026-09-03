@@ -4,7 +4,8 @@ from typing import List, Optional
 
 from database.database import (
     find_travel_package,
-    list_planner_destinations
+    list_planner_destinations,
+    get_travel_itinerary
 )
 
 from services.ai_planner import (
@@ -59,11 +60,11 @@ class PlannerRequest(BaseModel):
 
 
 # =========================================================
-# GET PLANNER DESTINATIONS
+# GET DESTINATIONS
 # =========================================================
 
 @router.get("/destinations")
-def get_planner_destinations():
+def get_planner_destinations_api():
 
     destinations = list_planner_destinations()
 
@@ -93,18 +94,37 @@ def recommend_trip(
 
 
     # =====================================================
-    # 2. FIND TRAVELVIBE PACKAGE
+    # 2. FIND PACKAGE
     # =====================================================
 
     package = find_travel_package(
+
         request.destination,
+
         budget_per_person,
+
         request.days
+
     )
 
 
     # =====================================================
-    # 3. PREPARE TRAVELVIBE DATA
+    # 3. GET ITINERARY FROM DATABASE
+    # =====================================================
+
+    itinerary = get_travel_itinerary(
+
+        request.destination,
+
+        budget_per_person,
+
+        request.days
+
+    )
+
+
+    # =====================================================
+    # 4. PACKAGE INFORMATION
     # =====================================================
 
     if package:
@@ -152,16 +172,11 @@ def recommend_trip(
 
     else:
 
-        # No predefined TravelVibe package.
-        # The AI can still create a destination-based
-        # suggested itinerary.
-
         budget_match = False
 
         experience = (
-            "No predefined TravelVibe package is currently "
-            "available for this destination. The AI will "
-            "create a suggested experience based on the "
+            "A personalized TravelVibe experience "
+            "will be created based on the selected "
             "destination, budget, duration and interests."
         )
 
@@ -183,28 +198,36 @@ def recommend_trip(
 
 
     # =====================================================
-    # 4. GENERATE AI PLAN
+    # 5. GENERATE AI PLAN
     # =====================================================
 
     try:
 
         ai_plan = generate_travel_plan(
 
-            destination=request.destination,
+            destination=
+                request.destination,
 
-            travellers=request.travellers,
+            travellers=
+                request.travellers,
 
-            days=request.days,
+            days=
+                request.days,
 
-            total_budget=request.budget,
+            total_budget=
+                request.budget,
 
-            budget_per_person=budget_per_person,
+            budget_per_person=
+                budget_per_person,
 
-            preferred_date=request.preferred_date,
+            preferred_date=
+                request.preferred_date,
 
-            interests=request.interests,
+            interests=
+                request.interests,
 
-            package=package
+            package=
+                package
 
         )
 
@@ -215,42 +238,11 @@ def recommend_trip(
             repr(error)
         )
 
-        return {
-
-            "success": False,
-
-            "error": "AI planner failed",
-
-            "details": str(error),
-
-            "destination":
-                request.destination,
-
-            "travellers":
-                request.travellers,
-
-            "days":
-                request.days,
-
-            "total_budget":
-                request.budget,
-
-            "budget_per_person":
-                round(
-                    budget_per_person
-                ),
-
-            "preferred_date":
-                request.preferred_date,
-
-            "interests":
-                request.interests
-
-        }
+        ai_plan = None
 
 
     # =====================================================
-    # 5. RETURN RESULT
+    # 6. RETURN RESULT
     # =====================================================
 
     return {
@@ -288,6 +280,9 @@ def recommend_trip(
 
         "includes":
             includes,
+
+        "itinerary":
+            itinerary,
 
         "ai_plan":
             ai_plan,
