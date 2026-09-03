@@ -118,9 +118,11 @@ def find_travel_package(
 ):
 
     destination = destination.strip()
+
     budget_per_person = float(
         budget_per_person
     )
+
     days = int(days)
 
 
@@ -159,6 +161,10 @@ def find_travel_package(
     matching_packages = []
 
 
+    # =====================================================
+    # CHECK EACH PACKAGE
+    # =====================================================
+
     for package in response.data:
 
         try:
@@ -186,6 +192,10 @@ def find_travel_package(
             )
 
 
+            # -------------------------------------------------
+            # Handle maximum budget
+            # -------------------------------------------------
+
             max_budget = (
                 float(max_budget_value)
                 if max_budget_value is not None
@@ -193,12 +203,20 @@ def find_travel_package(
             )
 
 
+            # -------------------------------------------------
+            # Handle maximum days
+            # -------------------------------------------------
+
             max_days = (
                 int(max_days_value)
                 if max_days_value is not None
                 else None
             )
 
+
+            # -------------------------------------------------
+            # Budget match
+            # -------------------------------------------------
 
             budget_ok = (
                 budget_per_person >= min_budget
@@ -211,6 +229,10 @@ def find_travel_package(
             )
 
 
+            # -------------------------------------------------
+            # Days match
+            # -------------------------------------------------
+
             days_ok = (
                 days >= min_days
                 and
@@ -221,6 +243,10 @@ def find_travel_package(
                 )
             )
 
+
+            # -------------------------------------------------
+            # Add matching package
+            # -------------------------------------------------
 
             if budget_ok and days_ok:
 
@@ -236,9 +262,7 @@ def find_travel_package(
 
             print(
                 "INVALID PACKAGE ROW:",
-                item
-                if False
-                else package
+                package
             )
 
             print(
@@ -247,9 +271,17 @@ def find_travel_package(
             )
 
 
+    # =====================================================
+    # NO MATCH
+    # =====================================================
+
     if not matching_packages:
         return None
 
+
+    # =====================================================
+    # SELECT HIGHEST MATCHING BUDGET BAND
+    # =====================================================
 
     matching_packages.sort(
         key=lambda package: float(
@@ -276,9 +308,11 @@ def find_next_travel_package(
 ):
 
     destination = destination.strip()
+
     budget_per_person = float(
         budget_per_person
     )
+
     days = int(days)
 
 
@@ -306,9 +340,6 @@ def find_next_travel_package(
         return None
 
 
-    next_package = None
-
-
     for package in response.data:
 
         try:
@@ -331,12 +362,17 @@ def find_next_travel_package(
                 "max_days"
             )
 
+
             max_days = (
                 int(max_days_value)
                 if max_days_value is not None
                 else None
             )
 
+
+            # -------------------------------------------------
+            # Check day range
+            # -------------------------------------------------
 
             days_ok = (
                 days >= min_days
@@ -349,14 +385,17 @@ def find_next_travel_package(
             )
 
 
+            # -------------------------------------------------
+            # Find next higher package
+            # -------------------------------------------------
+
             if (
                 days_ok
                 and
                 min_budget > budget_per_person
             ):
 
-                next_package = package
-                break
+                return package
 
 
         except (
@@ -375,7 +414,7 @@ def find_next_travel_package(
             )
 
 
-    return next_package
+    return None
 
 
 # =========================================================
@@ -452,7 +491,7 @@ def get_travel_itinerary(
 
 
     # =====================================================
-    # GET ACTIVE ROWS
+    # GET ACTIVE ITINERARY ROWS
     # =====================================================
 
     response = (
@@ -489,7 +528,7 @@ def get_travel_itinerary(
 
 
     # =====================================================
-    # FILTER ROWS
+    # FILTER ITINERARY ROWS
     # =====================================================
 
     for item in rows:
@@ -530,12 +569,20 @@ def get_travel_itinerary(
             )
 
 
+            # -------------------------------------------------
+            # Maximum budget
+            # -------------------------------------------------
+
             max_budget = (
                 float(max_budget_value)
                 if max_budget_value is not None
                 else None
             )
 
+
+            # -------------------------------------------------
+            # Maximum days
+            # -------------------------------------------------
 
             max_days = (
                 int(max_days_value)
@@ -544,11 +591,20 @@ def get_travel_itinerary(
             )
 
 
+            # -------------------------------------------------
+            # Destination match
+            # -------------------------------------------------
+
             destination_ok = (
                 row_destination
-                == destination.lower()
+                ==
+                destination.lower()
             )
 
+
+            # -------------------------------------------------
+            # Budget match
+            # -------------------------------------------------
 
             budget_ok = (
                 budget_per_person >= min_budget
@@ -561,6 +617,10 @@ def get_travel_itinerary(
             )
 
 
+            # -------------------------------------------------
+            # Package day-range match
+            # -------------------------------------------------
+
             days_ok = (
                 days >= min_days
                 and
@@ -571,6 +631,10 @@ def get_travel_itinerary(
                 )
             )
 
+
+            # -------------------------------------------------
+            # Debug information
+            # -------------------------------------------------
 
             print(
                 "ROW:",
@@ -584,16 +648,28 @@ def get_travel_itinerary(
             )
 
 
-              if (
-    destination_ok
-    and
-    budget_ok
-    and
-    days_ok
-    and
-    int(item.get("day_number", 0)) <= days
-):
-    matching_rows.append(item)
+            # -------------------------------------------------
+            # Only return requested days
+            # -------------------------------------------------
+
+            if (
+                destination_ok
+                and
+                budget_ok
+                and
+                days_ok
+                and
+                int(
+                    item.get(
+                        "day_number",
+                        0
+                    )
+                ) <= days
+            ):
+
+                matching_rows.append(
+                    item
+                )
 
 
         except (
