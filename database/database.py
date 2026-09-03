@@ -102,6 +102,10 @@ def update_status(item_id, status):
 # FIND EXACT TRAVELVIBE PACKAGE
 # =========================================================
 
+# =========================================================
+# FIND TRAVELVIBE PACKAGE
+# =========================================================
+
 def find_travel_package(
     destination,
     budget_per_person,
@@ -129,13 +133,83 @@ def find_travel_package(
             "min_budget_per_person",
             desc=True
         )
-        .limit(20)
         .execute()
     )
 
-
     if not response.data:
         return None
+
+
+    # =====================================================
+    # CHECK EACH PACKAGE
+    # =====================================================
+
+    for package in response.data:
+
+        min_budget = float(
+            package.get(
+                "min_budget_per_person",
+                0
+            )
+        )
+
+        max_budget = package.get(
+            "max_budget_per_person"
+        )
+
+        min_days = int(
+            package.get(
+                "min_days",
+                1
+            )
+        )
+
+        max_days = package.get(
+            "max_days"
+        )
+
+
+        # -------------------------------------------------
+        # Budget check
+        # -------------------------------------------------
+
+        budget_ok = (
+            budget_per_person >= min_budget
+            and
+            (
+                max_budget is None
+                or
+                budget_per_person <= float(max_budget)
+            )
+        )
+
+
+        # -------------------------------------------------
+        # Days check
+        # -------------------------------------------------
+
+        days_ok = (
+            days >= min_days
+            and
+            (
+                max_days is None
+                or
+                days <= int(max_days)
+            )
+        )
+
+
+        # -------------------------------------------------
+        # Exact package match
+        # -------------------------------------------------
+
+        if budget_ok and days_ok:
+
+            return package
+
+
+    return None
+   
 
 
     # =====================================================
