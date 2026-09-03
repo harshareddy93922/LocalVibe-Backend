@@ -391,60 +391,220 @@ def list_planner_destinations():
 # GET TRAVEL ITINERARY
 # =========================================================
 
+# =========================================================
+# GET TRAVEL ITINERARY
+# =========================================================
+
 def get_travel_itinerary(
     destination,
     budget_per_person,
     days
 ):
 
+    # -----------------------------------------------------
+    # Clean incoming values
+    # -----------------------------------------------------
+
+    destination = destination.strip()
+
+    budget_per_person = float(
+        budget_per_person
+    )
+
+    days = int(days)
+
+
+    # -----------------------------------------------------
+    # Get active itinerary rows for destination
+    # -----------------------------------------------------
+
     response = (
         supabase
         .table("travel_itineraries")
         .select("*")
-        .eq(
-            "active",
-            True
-        )
-        .ilike(
-            "destination",
-            destination
-        )
-        .lte(
-            "min_budget_per_person",
-            budget_per_person
-        )
-        .gte(
-            "max_budget_per_person",
-            budget_per_person
-        )
-        .lte(
-            "min_days",
-            days
-        )
-        .gte(
-            "max_days",
-            days
-        )
-        .order(
-            "day_number",
-            asc=True
-        )
+        .eq("active", True)
+        .eq("destination", destination)
+        .order("day_number", asc=True)
         .execute()
     )
 
+
+    # -----------------------------------------------------
+    # Debug information for Render logs
+    # -----------------------------------------------------
+
     print(
-        "ITINERARY QUERY:",
+        "ITINERARY SEARCH:",
         destination,
+        "budget/person:",
         budget_per_person,
+        "days:",
         days
     )
 
     print(
-        "ITINERARY RESULT:",
+        "ITINERARY DATABASE ROWS:",
         response.data
     )
 
+
     if not response.data:
+        print(
+            "NO ITINERARY ROWS FOUND FOR:",
+            destination
+        )
         return []
 
-    return response.data
+
+    matching_rows = []
+
+
+    # =====================================================
+    # CHECK EACH ROW
+    # =====================================================
+
+    for item in response.data:
+
+        try:
+
+            min_budget = float(
+                item.get(
+                    "min_budget_per_person",
+                    0
+                )
+            )
+
+            max_budget_value = item.get(
+                "max_budget_per_person"
+            )
+
+            min_days = int(
+                item.get(
+                    "min_days",
+                    1
+                )
+            )
+
+            max_days_value = item.get(
+                "max_days"
+            )
+
+
+            # -------------------------------------------------
+            # Handle NULL maximum budget
+            # -------------------------------------------------
+
+            if max_budget_value is None:
+
+                max_budget = None
+
+            else:
+
+                max_budget = float(
+                    max_budget_value
+                )
+
+
+            # -------------------------------------------------
+            # Handle NULL maximum days
+            # -------------------------------------------------
+
+            if max_days_value is None:
+
+                max_days = None
+
+            else:
+
+                max_days = int(
+                    max_days_value
+                )
+
+
+            # -------------------------------------------------
+            # Budget check
+            # -------------------------------------------------
+
+            budget_ok = (
+                budget_per_person >= min_budget
+                and
+                (
+                    max_budget is None
+                    or
+                    budget_per_person <= max_budget
+                )
+            )
+
+
+            # -------------------------------------------------
+            # Days check
+            # -------------------------------------------------
+
+            days_ok = (
+                days >= min_days
+                and
+                (
+                    max_days is None
+                    or
+                    days <= max_days
+                )
+            )
+
+
+            print(
+                "CHECK ITINERARY ROW:",
+                item.get("id"),
+                "budget_ok:",
+                budget_ok,
+                "days_ok:",
+                days_ok
+            )
+
+
+            # -------------------------------------------------
+            # Add matching itinerary
+            # -------------------------------------------------
+
+            if budget_ok and days_ok:
+
+                matching_rows.append(
+                    item
+                )
+
+
+        except (
+            TypeError,
+            ValueError
+        ) as error:
+
+            print(
+                "INVALID ITINERARY ROW:",
+                item
+            )
+
+            print(
+                "ERROR:",
+                repr(error)
+            )
+
+
+    # =====================================================
+    # SORT BY DAY
+    # =====================================================
+
+    matching_rows.sort(
+        key=lambda item: int(
+            item.get(
+                "day_number",
+                0
+            )
+        )
+    )
+
+
+    print(
+        "MATCHING ITINERARY ROWS:",
+        len(matching_rows)
+    )
+
+
+    return matching_rows
