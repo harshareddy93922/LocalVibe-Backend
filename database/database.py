@@ -72,7 +72,10 @@ def list_enquiries():
         supabase
         .table("enquiries")
         .select("*")
-        .order("id", desc=True)
+        .order(
+            "id",
+            desc=True
+        )
         .execute()
     )
 
@@ -83,7 +86,10 @@ def list_enquiries():
 # UPDATE ENQUIRY STATUS
 # =========================================================
 
-def update_status(item_id, status):
+def update_status(
+    item_id,
+    status
+):
 
     response = (
         supabase
@@ -91,16 +97,15 @@ def update_status(item_id, status):
         .update({
             "status": status
         })
-        .eq("id", item_id)
+        .eq(
+            "id",
+            item_id
+        )
         .execute()
     )
 
     return response.data
 
-
-# =========================================================
-# FIND EXACT TRAVELVIBE PACKAGE
-# =========================================================
 
 # =========================================================
 # FIND TRAVELVIBE PACKAGE
@@ -112,11 +117,21 @@ def find_travel_package(
     days
 ):
 
+    destination = destination.strip()
+    budget_per_person = float(
+        budget_per_person
+    )
+    days = int(days)
+
+
     response = (
         supabase
         .table("travel_packages")
         .select("*")
-        .eq("active", True)
+        .eq(
+            "active",
+            True
+        )
         .ilike(
             "destination",
             destination
@@ -136,149 +151,122 @@ def find_travel_package(
         .execute()
     )
 
+
     if not response.data:
         return None
 
 
-    # =====================================================
-    # CHECK EACH PACKAGE
-    # =====================================================
+    matching_packages = []
+
 
     for package in response.data:
 
-        min_budget = float(
+        try:
+
+            min_budget = float(
+                package.get(
+                    "min_budget_per_person",
+                    0
+                )
+            )
+
+            max_budget_value = package.get(
+                "max_budget_per_person"
+            )
+
+            min_days = int(
+                package.get(
+                    "min_days",
+                    1
+                )
+            )
+
+            max_days_value = package.get(
+                "max_days"
+            )
+
+
+            max_budget = (
+                float(max_budget_value)
+                if max_budget_value is not None
+                else None
+            )
+
+
+            max_days = (
+                int(max_days_value)
+                if max_days_value is not None
+                else None
+            )
+
+
+            budget_ok = (
+                budget_per_person >= min_budget
+                and
+                (
+                    max_budget is None
+                    or
+                    budget_per_person <= max_budget
+                )
+            )
+
+
+            days_ok = (
+                days >= min_days
+                and
+                (
+                    max_days is None
+                    or
+                    days <= max_days
+                )
+            )
+
+
+            if budget_ok and days_ok:
+
+                matching_packages.append(
+                    package
+                )
+
+
+        except (
+            TypeError,
+            ValueError
+        ) as error:
+
+            print(
+                "INVALID PACKAGE ROW:",
+                item
+                if False
+                else package
+            )
+
+            print(
+                "ERROR:",
+                repr(error)
+            )
+
+
+    if not matching_packages:
+        return None
+
+
+    matching_packages.sort(
+        key=lambda package: float(
             package.get(
                 "min_budget_per_person",
                 0
             )
-        )
-
-        max_budget = package.get(
-            "max_budget_per_person"
-        )
-
-        min_days = int(
-            package.get(
-                "min_days",
-                1
-            )
-        )
-
-        max_days = package.get(
-            "max_days"
-        )
+        ),
+        reverse=True
+    )
 
 
-        # -------------------------------------------------
-        # Budget check
-        # -------------------------------------------------
-
-        budget_ok = (
-            budget_per_person >= min_budget
-            and
-            (
-                max_budget is None
-                or
-                budget_per_person <= float(max_budget)
-            )
-        )
-
-
-        # -------------------------------------------------
-        # Days check
-        # -------------------------------------------------
-
-        days_ok = (
-            days >= min_days
-            and
-            (
-                max_days is None
-                or
-                days <= int(max_days)
-            )
-        )
-
-
-        # -------------------------------------------------
-        # Exact package match
-        # -------------------------------------------------
-
-        if budget_ok and days_ok:
-
-            return package
-
-
-    return None
-   
-
-
-    # =====================================================
-    # CHECK PACKAGE LIMITS
-    # =====================================================
-
-    for package in response.data:
-
-        max_budget = package.get(
-            "max_budget_per_person"
-        )
-
-        max_days = package.get(
-            "max_days"
-        )
-
-
-        # -------------------------------------------------
-        # Maximum budget
-        # -------------------------------------------------
-
-        budget_ok = (
-            max_budget is None
-            or budget_per_person
-            <= float(max_budget)
-        )
-
-
-        # -------------------------------------------------
-        # Maximum days
-        # -------------------------------------------------
-
-        days_ok = (
-            max_days is None
-            or days
-            <= int(max_days)
-        )
-
-
-        # -------------------------------------------------
-        # Exact package match
-        # -------------------------------------------------
-
-        if budget_ok and days_ok:
-
-            return package
-
-
-    return None
+    return matching_packages[0]
 
 
 # =========================================================
 # FIND NEXT TRAVELVIBE PACKAGE
-# =========================================================
-#
-# Used when the customer's current budget does not
-# match an available package.
-#
-# Example:
-#
-# Customer:
-# ₹4,000/person
-#
-# Next package:
-# ₹5,000/person
-#
-# We can then tell the customer the approximate budget
-# required instead of simply saying "No".
-#
 # =========================================================
 
 def find_next_travel_package(
@@ -287,24 +275,29 @@ def find_next_travel_package(
     days
 ):
 
+    destination = destination.strip()
+    budget_per_person = float(
+        budget_per_person
+    )
+    days = int(days)
+
+
     response = (
         supabase
         .table("travel_packages")
         .select("*")
-        .eq("active", True)
+        .eq(
+            "active",
+            True
+        )
         .ilike(
             "destination",
             destination
         )
-        .lte(
-            "min_days",
-            days
-        )
         .order(
             "min_budget_per_person",
-            asc=True
+            desc=False
         )
-        .limit(20)
         .execute()
     )
 
@@ -313,57 +306,79 @@ def find_next_travel_package(
         return None
 
 
-    # =====================================================
-    # FIND CHEAPEST PACKAGE ABOVE CURRENT BUDGET
-    # THAT SUPPORTS THE REQUESTED NUMBER OF DAYS
-    # =====================================================
+    next_package = None
+
 
     for package in response.data:
 
-        max_days = package.get(
-            "max_days"
-        )
+        try:
 
-
-        # -------------------------------------------------
-        # Check maximum days
-        # -------------------------------------------------
-
-        days_ok = (
-            max_days is None
-            or days
-            <= int(max_days)
-        )
-
-
-        if not days_ok:
-            continue
-
-
-        # -------------------------------------------------
-        # Package minimum budget
-        # -------------------------------------------------
-
-        min_budget = float(
-            package.get(
-                "min_budget_per_person",
-                0
+            min_budget = float(
+                package.get(
+                    "min_budget_per_person",
+                    0
+                )
             )
-        )
+
+            min_days = int(
+                package.get(
+                    "min_days",
+                    1
+                )
+            )
+
+            max_days_value = package.get(
+                "max_days"
+            )
+
+            max_days = (
+                int(max_days_value)
+                if max_days_value is not None
+                else None
+            )
 
 
-        # -------------------------------------------------
-        # Only return a package that costs more than
-        # the customer's current budget.
-        # -------------------------------------------------
+            days_ok = (
+                days >= min_days
+                and
+                (
+                    max_days is None
+                    or
+                    days <= max_days
+                )
+            )
 
-        if min_budget > budget_per_person:
 
-            return package
+            if (
+                days_ok
+                and
+                min_budget > budget_per_person
+            ):
+
+                next_package = package
+                break
 
 
-    return None
-    # =========================================================
+        except (
+            TypeError,
+            ValueError
+        ) as error:
+
+            print(
+                "INVALID NEXT PACKAGE ROW:",
+                package
+            )
+
+            print(
+                "ERROR:",
+                repr(error)
+            )
+
+
+    return next_package
+
+
+# =========================================================
 # LIST PLANNER DESTINATIONS
 # =========================================================
 
@@ -372,28 +387,22 @@ def list_planner_destinations():
     response = (
         supabase
         .table("planner_destinations")
-        .select("id, name, state")
-        .eq("active", True)
-        .order("name")
+        .select(
+            "id, name, state, description"
+        )
+        .eq(
+            "active",
+            True
+        )
+        .order(
+            "name",
+            desc=False
+        )
         .execute()
     )
 
     return response.data
-    # =========================================================
-# GET TRAVEL ITINERARY
-# =========================================================
 
-# =========================================================
-# GET TRAVEL ITINERARY
-# =========================================================
-
-# =========================================================
-# GET TRAVEL ITINERARY
-# =========================================================
-
-# =========================================================
-# GET TRAVEL ITINERARY
-# =========================================================
 
 # =========================================================
 # GET TRAVEL ITINERARY
@@ -406,20 +415,45 @@ def get_travel_itinerary(
 ):
 
     destination = destination.strip()
-    budget_per_person = float(budget_per_person)
+
+    budget_per_person = float(
+        budget_per_person
+    )
+
     days = int(days)
 
-    print("========================================")
-    print("TRAVELVIBE ITINERARY DEBUG")
-    print("Destination:", destination)
-    print("Budget/person:", budget_per_person)
-    print("Days:", days)
-    print("========================================")
+
+    print(
+        "========================================"
+    )
+
+    print(
+        "TRAVELVIBE ITINERARY SEARCH"
+    )
+
+    print(
+        "Destination:",
+        destination
+    )
+
+    print(
+        "Budget/person:",
+        budget_per_person
+    )
+
+    print(
+        "Days:",
+        days
+    )
+
+    print(
+        "========================================"
+    )
 
 
-    # -----------------------------------------------------
-    # Fetch destination rows
-    # -----------------------------------------------------
+    # =====================================================
+    # GET ACTIVE ROWS
+    # =====================================================
 
     response = (
         supabase
@@ -433,21 +467,19 @@ def get_travel_itinerary(
     )
 
 
-    print(
-        "TOTAL ITINERARY ROWS RETURNED:",
-        len(response.data or [])
-    )
+    rows = response.data or []
+
 
     print(
-        "ALL ITINERARY DATA:",
-        response.data
+        "ITINERARY ROW COUNT:",
+        len(rows)
     )
 
 
-    if not response.data:
+    if not rows:
 
         print(
-            "NO ROWS FOUND IN travel_itineraries"
+            "NO ACTIVE ITINERARY ROWS FOUND"
         )
 
         return []
@@ -457,124 +489,132 @@ def get_travel_itinerary(
 
 
     # =====================================================
-    # FILTER IN PYTHON
+    # FILTER ROWS
     # =====================================================
 
-    for item in response.data:
+    for item in rows:
 
-        row_destination = str(
-            item.get(
-                "destination",
-                ""
+        try:
+
+            row_destination = str(
+                item.get(
+                    "destination",
+                    ""
+                )
+            ).strip().lower()
+
+
+            min_budget = float(
+                item.get(
+                    "min_budget_per_person",
+                    0
+                )
             )
-        ).strip().lower()
 
 
-        row_min_budget = float(
-            item.get(
-                "min_budget_per_person",
-                0
+            max_budget_value = item.get(
+                "max_budget_per_person"
             )
-        )
 
 
-        row_max_budget_value = item.get(
-            "max_budget_per_person"
-        )
-
-
-        row_min_days = int(
-            item.get(
-                "min_days",
-                1
+            min_days = int(
+                item.get(
+                    "min_days",
+                    1
+                )
             )
-        )
 
 
-        row_max_days_value = item.get(
-            "max_days"
-        )
-
-
-        row_max_budget = (
-
-            float(row_max_budget_value)
-
-            if row_max_budget_value is not None
-
-            else None
-
-        )
-
-
-        row_max_days = (
-
-            int(row_max_days_value)
-
-            if row_max_days_value is not None
-
-            else None
-
-        )
-
-
-        destination_ok = (
-            row_destination ==
-            destination.lower()
-        )
-
-
-        budget_ok = (
-            budget_per_person >=
-            row_min_budget
-            and
-            (
-                row_max_budget is None
-                or
-                budget_per_person <=
-                row_max_budget
+            max_days_value = item.get(
+                "max_days"
             )
-        )
 
 
-        days_ok = (
-            days >= row_min_days
-            and
-            (
-                row_max_days is None
-                or
-                days <= row_max_days
+            max_budget = (
+                float(max_budget_value)
+                if max_budget_value is not None
+                else None
             )
-        )
 
 
-        print(
-            "ROW:",
-            item.get("id"),
-            "| destination:",
-            destination_ok,
-            "| budget:",
-            budget_ok,
-            "| days:",
-            days_ok
-        )
+            max_days = (
+                int(max_days_value)
+                if max_days_value is not None
+                else None
+            )
 
 
-        if (
-            destination_ok
-            and
-            budget_ok
-            and
-            days_ok
-        ):
+            destination_ok = (
+                row_destination
+                == destination.lower()
+            )
 
-            matching_rows.append(
+
+            budget_ok = (
+                budget_per_person >= min_budget
+                and
+                (
+                    max_budget is None
+                    or
+                    budget_per_person <= max_budget
+                )
+            )
+
+
+            days_ok = (
+                days >= min_days
+                and
+                (
+                    max_days is None
+                    or
+                    days <= max_days
+                )
+            )
+
+
+            print(
+                "ROW:",
+                item.get("id"),
+                "| destination:",
+                destination_ok,
+                "| budget:",
+                budget_ok,
+                "| days:",
+                days_ok
+            )
+
+
+            if (
+                destination_ok
+                and
+                budget_ok
+                and
+                days_ok
+            ):
+
+                matching_rows.append(
+                    item
+                )
+
+
+        except (
+            TypeError,
+            ValueError
+        ) as error:
+
+            print(
+                "INVALID ITINERARY ROW:",
                 item
             )
 
+            print(
+                "ERROR:",
+                repr(error)
+            )
+
 
     # =====================================================
-    # SORT
+    # SORT BY DAY
     # =====================================================
 
     matching_rows.sort(
@@ -588,7 +628,7 @@ def get_travel_itinerary(
 
 
     print(
-        "FINAL MATCHING ITINERARY ROWS:",
+        "MATCHING ITINERARY ROWS:",
         len(matching_rows)
     )
 
