@@ -383,31 +383,28 @@ def list_planner_destinations():
 # GET TRAVEL ITINERARY
 # =========================================================
 
+# =========================================================
+# GET TRAVEL ITINERARY
+# =========================================================
+
 def get_travel_itinerary(
     destination,
     budget_per_person,
     days
 ):
 
+    # -----------------------------------------------------
+    # Get all active itinerary rows for this destination
+    # -----------------------------------------------------
+
     response = (
         supabase
         .table("travel_itineraries")
         .select("*")
-        .eq(
-            "active",
-            True
-        )
+        .eq("active", True)
         .ilike(
             "destination",
             destination
-        )
-        .lte(
-            "min_budget_per_person",
-            budget_per_person
-        )
-        .order(
-            "min_budget_per_person",
-            desc=True
         )
         .execute()
     )
@@ -419,79 +416,124 @@ def get_travel_itinerary(
     matching_rows = []
 
 
+    # =====================================================
+    # CHECK EACH ITINERARY ROW
+    # =====================================================
+
     for item in response.data:
 
-        min_budget = float(
-            item.get(
-                "min_budget_per_person",
-                0
+        try:
+
+            min_budget = float(
+                item.get(
+                    "min_budget_per_person",
+                    0
+                )
             )
-        )
 
-        max_budget = item.get(
-            "max_budget_per_person"
-        )
-
-        min_days = int(
-            item.get(
-                "min_days",
-                1
+            max_budget_value = item.get(
+                "max_budget_per_person"
             )
-        )
 
-        max_days = item.get(
-            "max_days"
-        )
-
-
-        # -------------------------------------------------
-        # Budget check
-        # -------------------------------------------------
-
-        budget_ok = (
-            budget_per_person >= min_budget
-            and
-            (
-                max_budget is None
-                or
-                budget_per_person <= float(max_budget)
+            min_days = int(
+                item.get(
+                    "min_days",
+                    1
+                )
             )
-        )
 
-
-        # -------------------------------------------------
-        # Days check
-        # -------------------------------------------------
-
-        days_ok = (
-            days >= min_days
-            and
-            (
-                max_days is None
-                or
-                days <= int(max_days)
-            )
-        )
-
-
-        if budget_ok and days_ok:
-
-            matching_rows.append(
-                item
+            max_days_value = item.get(
+                "max_days"
             )
 
 
-    # -----------------------------------------------------
-    # Sort by day number
-    # -----------------------------------------------------
+            # -------------------------------------------------
+            # Convert nullable values safely
+            # -------------------------------------------------
+
+            max_budget = (
+                float(max_budget_value)
+                if max_budget_value is not None
+                else None
+            )
+
+            max_days = (
+                int(max_days_value)
+                if max_days_value is not None
+                else None
+            )
+
+
+            # -------------------------------------------------
+            # Budget match
+            # -------------------------------------------------
+
+            budget_ok = (
+                budget_per_person >= min_budget
+                and
+                (
+                    max_budget is None
+                    or budget_per_person <= max_budget
+                )
+            )
+
+
+            # -------------------------------------------------
+            # Days match
+            # -------------------------------------------------
+
+            days_ok = (
+                days >= min_days
+                and
+                (
+                    max_days is None
+                    or days <= max_days
+                )
+            )
+
+
+            # -------------------------------------------------
+            # Add matching row
+            # -------------------------------------------------
+
+            if budget_ok and days_ok:
+
+                matching_rows.append(item)
+
+
+        except (TypeError, ValueError) as error:
+
+            print(
+                "Invalid itinerary row:",
+                item,
+                "ERROR:",
+                repr(error)
+            )
+
+            continue
+
+
+    # =====================================================
+    # SORT BY DAY NUMBER
+    # =====================================================
 
     matching_rows.sort(
-        key=lambda x: int(
-            x.get(
+        key=lambda item: int(
+            item.get(
                 "day_number",
                 0
             )
         )
+    )
+
+
+    print(
+        "TRAVEL ITINERARY MATCH:",
+        destination,
+        budget_per_person,
+        days,
+        "ROWS:",
+        len(matching_rows)
     )
 
 
